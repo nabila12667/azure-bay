@@ -3,8 +3,12 @@
 // and steering, with the velocity kept along the heading so a car grips the
 // road instead of sliding. Traffic follows the road grid from intersection
 // to intersection; police cars steer straight at their target.
+//
+// Every kind drives differently — a sports car is fast and twitchy, a truck
+// is slow and heavy, a limo is long — and Rosa's tuning (bought at the
+// garage) makes whatever Leo drives a little faster.
 
-import { CAR } from './config.js';
+import { CAR, CAR_KINDS, GARAGE } from './config.js';
 import { ROADS_X, ROADS_Y, ROAD_WIDTH, randomIntersection, nearestRoadPoint, resolveBuildings, clampToWorld } from './city.js';
 
 export const KIND_SEDAN = 'sedan';
@@ -13,6 +17,9 @@ export const KIND_TRUCK = 'truck';
 export const KIND_SPORTS = 'sports';
 export const KIND_POLICE = 'police';
 export const KIND_VAN = 'van';
+export const KIND_MUSCLE = 'muscle';
+export const KIND_LIMO = 'limo';
+export const KIND_ARMORED = 'armored';
 
 const PAINTS = ['#d94f3d', '#3d7dd9', '#e8b93c', '#7fbf5a', '#9b59b6', '#e8e4da', '#2b2f36', '#d97b2f'];
 const TAXI_PAINT = '#f2c531';
@@ -21,6 +28,7 @@ let nextId = 1;
 
 export function createCar(x, y, angle, kind, random) {
   const paint = kind === KIND_TAXI ? TAXI_PAINT : kind === KIND_POLICE ? '#20242c'
+    : kind === KIND_ARMORED ? '#5a5f6b'
     : PAINTS[Math.floor((random ? random() : Math.random()) * PAINTS.length)];
   return {
     id: nextId,
@@ -31,7 +39,7 @@ export function createCar(x, y, angle, kind, random) {
     // Traffic state: the intersection it is driving toward, and the road it is on.
     target: null,
     r: 26,
-    hp: CAR.health,
+    hp: kind === KIND_ARMORED ? CAR.health * 2 : CAR.health,
     burning: 0,
     exploded: false,
     siren: 0,
@@ -40,17 +48,22 @@ export function createCar(x, y, angle, kind, random) {
   };
 }
 
-/** Drive a car one step with throttle (-1..1), steering (-1..1) and a brake flag. */
-export function driveCar(car, dt, throttle, steer, brake) {
-  const max = car.kind === KIND_POLICE ? CAR.policeSpeed : CAR.maxSpeed;
+/** Drive a car one step with throttle (-1..1), steering (-1..1) and a brake
+ * flag. `tuning` is Rosa's garage level (0-3) and only ever applies to
+ * Leo's car: each level adds speed and acceleration. */
+export function driveCar(car, dt, throttle, steer, brake, tuning) {
+  const kind = CAR_KINDS[car.kind] || CAR_KINDS.sedan;
+  const tune = tuning || 0;
+  const max = kind.maxSpeed * (1 + GARAGE.tuneSpeedBonus * tune);
+  const accel = kind.accel * (1 + GARAGE.tuneAccelBonus * tune);
   if (brake) {
     car.speed -= Math.sign(car.speed) * CAR.brake * dt;
     if (Math.abs(car.speed) < 20) car.speed = 0;
   } else if (throttle > 0) {
-    car.speed += CAR.accel * throttle * dt;
+    car.speed += accel * throttle * dt;
   } else if (throttle < 0) {
     if (car.speed > 5) car.speed -= CAR.brake * dt;
-    else car.speed += CAR.accel * 0.6 * throttle * dt;
+    else car.speed += accel * 0.6 * throttle * dt;
   } else {
     car.speed -= Math.sign(car.speed) * 140 * dt;
     if (Math.abs(car.speed) < 10) car.speed = 0;
@@ -154,7 +167,7 @@ export function collideWorld(car, city) {
 
 /** A parked or roaming car on a road near (x, y), for spawns. */
 export function spawnTrafficCar(random, x, y) {
-  const kinds = [KIND_SEDAN, KIND_SEDAN, KIND_TAXI, KIND_VAN, KIND_TRUCK, KIND_SPORTS];
+  const kinds = [KIND_SEDAN, KIND_SEDAN, KIND_TAXI, KIND_VAN, KIND_TRUCK, KIND_SPORTS, KIND_MUSCLE, KIND_LIMO];
   const kind = kinds[Math.floor(random() * kinds.length)];
   const onVertical = random() < 0.5;
   const angle = onVertical ? (random() < 0.5 ? Math.PI / 2 : -Math.PI / 2) : (random() < 0.5 ? 0 : Math.PI);

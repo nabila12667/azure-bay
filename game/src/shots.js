@@ -1,9 +1,9 @@
-// The screenshot scenes behind ?shot=start|drive|chase|mission. Each one
-// plays the real rules forward from a fresh world for a fixed number of
-// steps, steered by a simple autopilot, so the frame is what a short game
-// really looks like and the same seed always gives the same frame. The
-// cover is the chase: three wanted stars, two cruisers on Leo's tail, the
-// minimap and the mission objective all on screen at once.
+// The screenshot scenes behind ?shot=heist|race|chase|night. Each one plays
+// the real rules forward from a fresh world for a fixed number of steps,
+// steered by a simple autopilot, so the frame is what a short game really
+// looks like and the same seed always gives the same frame. The cover is
+// the heist: six bank guards, the shotgun, three wanted stars, the vault
+// loot and the minimap all on screen at once.
 
 import { STEP, PLACES } from './config.js';
 import { stepWorld, resetWorld } from './world.js';
@@ -11,13 +11,13 @@ import { enterCar, exitCar } from './player.js';
 import { setWanted } from './police.js';
 import { startMission } from './missions.js';
 import { SCREEN_PLAY, SCREEN_TITLE } from './render.js';
-import { planRoute, followRoute } from './vehicles.js';
+import { planRoute, followRoute, createCar } from './vehicles.js';
 import { randomIntersection } from './city.js';
 
-const START_SECONDS = 6;
-const DRIVE_SECONDS = 8;
+const HEIST_SECONDS = 6;
+const RACE_SECONDS = 9;
 const CHASE_SECONDS = 7;
-const MISSION_SECONDS = 6;
+const NIGHT_SECONDS = 4;
 
 /** A scripted input for the autopilot: it answers move() from a function. */
 function scriptedInput(moveFn) {
@@ -62,18 +62,69 @@ function aimAt(state, x, y) {
 export function stageShot(name, state) {
   resetWorld(state, true);
   const player = state.player;
-  if (name === 'drive') {
-    // Leo steals the parked sedan by the plaza and takes it up to Rosa's
-    // Garage, following the roads so the shot shows him driving, not
-    // cutting across a block.
-    const car = state.cars.find((c) => !c.exploded && Math.hypot(c.x - 2300, c.y - 1340) < 200) || state.cars[0];
+  if (name === 'heist') {
+    // The Azure Heist: Leo walks in on the bank from the west, shotgun in
+    // hand, six guards ahead and three stars already on him. The shot
+    // catches the firefight in progress — muzzle flashes, guards standing,
+    // the vault marker and the wanted stars all on screen.
+    state.missions.index = 7;
+    startMission(state.missions, state);
+    player.x = PLACES.bank.x - 700;
+    player.y = PLACES.bank.y + 320;
+    player.hasPistol = true;
+    player.hasShotgun = true;
+    player.weapon = 'shotgun';
+    player.shells = 12;
+    player.cash = 2400;
+    const input = scriptedInput(() => ({ x: 0, y: 0 }));
+    input.mouse.down = true;
+    for (let i = 0; i < HEIST_SECONDS / STEP; i += 1) {
+      const alive = state.rivals.find((r) => r.state !== 'dead');
+      const target = alive || { x: PLACES.bank.x, y: PLACES.bank.y };
+      const dist = Math.hypot(target.x - player.x, target.y - player.y);
+      input.move = dist > 320
+        ? () => walkToward(state, PLACES.bank.x, PLACES.bank.y)
+        : () => ({ x: 0, y: 0 });
+      stepWorld(state, STEP, input, aimAt(state, target.x, target.y));
+    }
+    return { screen: SCREEN_PLAY, best: 0 };
+  }
+  if (name === 'race') {
+    // Bay Street Grand Prix: a sports car at night in the rain, racing the
+    // gates with the timer running and the headlights cutting through the
+    // dark. Leo starts at the first gate already moving.
+    state.dayTime = 0.62;
+    state.rainTarget = 1;
+    state.rain = 0.9;
+    const car = createCar(900, 320, 0, 'sports', state.random);
+    car.speed = 380;
+    state.cars.push(car);
     player.x = car.x;
     player.y = car.y;
     enterCar(player, car, state);
-    state.missions.index = 0;
+    state.missions.index = 6;
     startMission(state.missions, state);
-    const input = makeRouteInput(state, { x: 1000, y: 380 }, false);
-    for (let i = 0; i < DRIVE_SECONDS / STEP; i += 1) {
+    const gates = [
+      { x: 2880, y: 320 }, { x: 3520, y: 1280 }, { x: 2880, y: 2240 },
+      { x: 960, y: 2240 }, { x: 320, y: 1280 },
+    ];
+    // Persistent waypoints to the current gate: re-planning from scratch
+    // every frame made the car dither near the start line instead of racing.
+    let gate = 0;
+    let waypoints = planRoute(car.x, car.y, gates[0].x, gates[0].y);
+    const input = scriptedInput(() => {
+      const carNow = state.player.inCar;
+      if (!carNow) return { x: 0, y: 0 };
+      const target = gates[Math.min(gate, gates.length - 1)];
+      if (Math.hypot(target.x - carNow.x, target.y - carNow.y) < 130) {
+        gate += 1;
+        waypoints = gate < gates.length
+          ? planRoute(carNow.x, carNow.y, gates[gate].x, gates[gate].y)
+          : [];
+      }
+      return followRoute(carNow, waypoints);
+    });
+    for (let i = 0; i < RACE_SECONDS / STEP; i += 1) {
       stepWorld(state, STEP, input, player.angle);
     }
     return { screen: SCREEN_PLAY, best: 0 };
@@ -96,36 +147,29 @@ export function stageShot(name, state) {
     }
     return { screen: SCREEN_PLAY, best: 0 };
   }
-  if (name === 'mission') {
-    // Dockside Trouble: Leo walks in on the warehouse from the west and
-    // opens fire on the Gulls. He starts far enough out that the shot
-    // catches the firefight in progress — the banner faded, rivals still
-    // standing, muzzle flashes on screen — instead of the next mission.
-    state.missions.index = 3;
-    startMission(state.missions, state);
-    player.x = PLACES.warehouse.x - 1100;
-    player.y = PLACES.warehouse.y + 220;
-    player.hasPistol = true;
-    player.ammo = 48;
-    const input = scriptedInput(() => ({ x: 0, y: 0 }));
-    input.mouse.down = true;
-    for (let i = 0; i < MISSION_SECONDS / STEP; i += 1) {
-      const alive = state.rivals.find((r) => r.state !== 'dead');
-      const target = alive || { x: PLACES.warehouse.x, y: PLACES.warehouse.y };
-      const dist = Math.hypot(target.x - player.x, target.y - player.y);
-      input.move = dist > 320
-        ? () => walkToward(state, PLACES.warehouse.x, PLACES.warehouse.y)
-        : () => ({ x: 0, y: 0 });
-      stepWorld(state, STEP, input, aimAt(state, target.x, target.y));
-    }
-    return { screen: SCREEN_PLAY, best: 0 };
+  // night: Leo drives the marina road after dark in the rain, headlights
+  // on, the docks and boats and the lighthouse beside him, the city glowing.
+  state.dayTime = 0.65;
+  state.rainTarget = 1;
+  state.rain = 0.85;
+  const car = createCar(3100, 2240, 0, 'muscle', state.random);
+  car.speed = 200;
+  state.cars.push(car);
+  player.x = car.x;
+  player.y = car.y;
+  enterCar(player, car, state);
+  player.cash = 1250;
+  player.hasPistol = true;
+  player.weapon = 'pistol';
+  player.ammo = 24;
+  state.missions.index = 4;
+  startMission(state.missions, state);
+  const far = { x: 3500, y: 2240 };
+  const input = makeRouteInput(state, far, true);
+  for (let i = 0; i < NIGHT_SECONDS / STEP; i += 1) {
+    stepWorld(state, STEP, input, player.angle);
   }
-  // start: the title screen over a living downtown, traffic rolling by.
-  const input = scriptedInput(() => ({ x: 0, y: 0 }));
-  for (let i = 0; i < START_SECONDS / STEP; i += 1) {
-    stepWorld(state, STEP, input, 0);
-  }
-  return { screen: SCREEN_TITLE, best: 0 };
+  return { screen: SCREEN_PLAY, best: 0 };
 }
 
 export { exitCar };

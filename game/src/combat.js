@@ -1,6 +1,10 @@
 // Combat: bullets, muzzle flashes, explosions and the pickups the street
 // leaves behind. Everything here is a pooled, pre-allocated object — no
 // allocation in the hot loop — and nothing here knows about screens or keys.
+//
+// Pickups: health and ammo at the hospital and the garage, shotgun shells
+// beside them, cash from fallen rivals, and twelve hidden stashes around
+// the city that pay a bonus when they are all found.
 
 import { PLAYER } from './config.js';
 import { hitsBuilding } from './city.js';
@@ -8,10 +12,12 @@ import { hitsBuilding } from './city.js';
 export const PICKUP_HEALTH = 'health';
 export const PICKUP_AMMO = 'ammo';
 export const PICKUP_CASH = 'cash';
+export const PICKUP_SHELLS = 'shells';
+export const PICKUP_STASH = 'stash';
 
 const BULLET_SPEED = 900;
-const BULLET_POOL = 48;
-const PARTICLE_POOL = 160;
+const BULLET_POOL = 64;
+const PARTICLE_POOL = 300;
 
 export function createCombat() {
   const bullets = [];
@@ -50,6 +56,27 @@ export function fireBullet(combat, x, y, angle, damage, fromPlayer) {
   return true;
 }
 
+/** A shotgun blast: five pellets in a spread, each one a short-range bullet. */
+export function fireShotgun(combat, x, y, angle) {
+  let fired = 0;
+  for (let i = 0; i < PLAYER.shotgunPellets; i += 1) {
+    const spread = (i - (PLAYER.shotgunPellets - 1) / 2) * PLAYER.shotgunSpread
+      + (Math.random() - 0.5) * 0.05;
+    const b = freeBullet(combat);
+    if (!b) break;
+    b.active = true;
+    b.x = x + Math.cos(angle) * 22;
+    b.y = y + Math.sin(angle) * 22;
+    b.vx = Math.cos(angle + spread) * BULLET_SPEED;
+    b.vy = Math.sin(angle + spread) * BULLET_SPEED;
+    b.life = PLAYER.shotgunRange / BULLET_SPEED;
+    b.damage = PLAYER.shotgunDamage;
+    b.fromPlayer = true;
+    fired += 1;
+  }
+  return fired;
+}
+
 export function spawnParticles(combat, x, y, count, color, speed, life) {
   for (let i = 0; i < count; i += 1) {
     const p = freeParticle(combat);
@@ -66,6 +93,21 @@ export function spawnParticles(combat, x, y, count, color, speed, life) {
     p.size = 2 + Math.random() * 4;
     p.color = color;
   }
+}
+
+/** A skid mark: a long-lived dark particle that stays where the tyre was. */
+export function spawnSkid(combat, x, y) {
+  const p = freeParticle(combat);
+  if (!p) return;
+  p.active = true;
+  p.x = x;
+  p.y = y;
+  p.vx = 0;
+  p.vy = 0;
+  p.life = 2.4;
+  p.maxLife = 2.4;
+  p.size = 7;
+  p.color = '#1c1e24';
 }
 
 export function explode(combat, x, y) {

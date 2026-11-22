@@ -1,7 +1,10 @@
 // Azure Bay: a complete open-world crime game in the spirit of GTA 6 —
 // a city to explore on foot and by car, traffic and pedestrians, cars to
-// steal, a wanted level with police who chase, five missions with a story,
-// combat, a HUD with a minimap, and a save. The game is this directory's
+// steal, a wanted level with police who chase, eight missions with a story
+// (a night courier run, an illegal street race and a bank heist on top of
+// the first five jobs), combat with a pistol and a shotgun, a garage that
+// repairs and tunes cars, hidden stashes, a day that slides into night
+// with rain, a HUD with a minimap, and a save. The game is this directory's
 // game/ folder, plain static files a desktop browser loads offline
 // (game/index.html and its ES modules, no library and no network request),
 // and the program hands it in. It copies game/ and screenshots/ from
@@ -11,6 +14,7 @@
 // Serve it locally with `node serve.ts`, then open http://localhost:8080.
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+// Run the headless logic tests with `node game/tests.mjs`.
 
 import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -20,6 +24,9 @@ import { buildDossier } from './vendor/makefun-game.ts';
 const here = fileURLToPath(new URL('.', import.meta.url));
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
+if (!existsSync(join(here, 'game', 'index.html'))) {
+  throw new Error('game/index.html is missing: the entry has no game to hand in');
+}
 mkdirSync(out, { recursive: true });
 cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
 mkdirSync(join(out, 'screenshots'), { recursive: true });

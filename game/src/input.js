@@ -1,13 +1,15 @@
 // Keyboard and pointer input. Held keys give movement and driving; one-shot
-// presses (confirm, pause, enter a car, punch, mute) are queued as bit flags
-// and taken once by the loop, so a press between two frames is never lost and
-// never counted twice. The mouse aims and fires.
+// presses (confirm, pause, enter a car, punch, mute, repair, switch weapon)
+// are queued as bit flags and taken once by the loop, so a press between two
+// frames is never lost and never counted twice. The mouse aims and fires.
 
 export const ACTION_CONFIRM = 1;
 export const ACTION_PAUSE = 2;
 export const ACTION_ENTER = 4;
 export const ACTION_PUNCH = 8;
 export const ACTION_MUTE = 16;
+export const ACTION_REPAIR = 32;
+export const ACTION_SWITCH = 64;
 
 const UP = new Set(['ArrowUp', 'KeyW']);
 const DOWN = new Set(['ArrowDown', 'KeyS']);
@@ -18,6 +20,8 @@ const PAUSE = new Set(['KeyP', 'Escape']);
 const ENTER = new Set(['KeyE']);
 const PUNCH = new Set(['Space']);
 const MUTE = new Set(['KeyM']);
+const REPAIR = new Set(['KeyR']);
+const SWITCH = new Set(['KeyQ']);
 
 export function createInput(canvas) {
   const keys = { up: false, down: false, left: false, right: false, run: false };
@@ -43,6 +47,10 @@ export function createInput(canvas) {
       if (!event.repeat) actions |= ACTION_PUNCH;
     } else if (MUTE.has(event.code)) {
       if (!event.repeat) actions |= ACTION_MUTE;
+    } else if (REPAIR.has(event.code)) {
+      if (!event.repeat) actions |= ACTION_REPAIR;
+    } else if (SWITCH.has(event.code)) {
+      if (!event.repeat) actions |= ACTION_SWITCH;
     } else if (UP.has(event.code) || DOWN.has(event.code) || LEFT.has(event.code) || RIGHT.has(event.code) || event.code === 'ShiftLeft' || event.code === 'ShiftRight') {
       mark(event.code, true);
     } else {

@@ -3,14 +3,14 @@
 // renderer paints what is there. The game moves between five screens:
 // title, play, paused, busted/wasted, and story complete.
 //
-// ?seed=N fixes the city. ?shot=start|drive|chase|mission (with &seed=N)
+// ?seed=N fixes the city. ?shot=heist|race|chase|night (with &seed=N)
 // stages that scene instead of running the loop, paints it twice and sets
 // window.__shotReady for a screenshot.
 
 import { BEST_KEY, STEP } from './config.js';
 import { createRandom } from './random.js';
-import { createWorld, stepWorld, applyBusted, applyWasted, resetWorld, applySave, loadSave, EVENT_BUSTED, EVENT_WASTED, EVENT_MISSION_DONE, EVENT_MISSION_FAILED, EVENT_WANTED_UP, EVENT_SHOT, EVENT_PUNCH, EVENT_PICKUP, EVENT_EXPLOSION, EVENT_HIT } from './world.js';
-import { ACTION_CONFIRM, ACTION_PAUSE, ACTION_ENTER, ACTION_PUNCH, ACTION_MUTE, createInput } from './input.js';
+import { createWorld, stepWorld, applyBusted, applyWasted, resetWorld, applySave, loadSave, EVENT_BUSTED, EVENT_WASTED, EVENT_MISSION_DONE, EVENT_MISSION_FAILED, EVENT_WANTED_UP, EVENT_SHOT, EVENT_PUNCH, EVENT_PICKUP, EVENT_EXPLOSION, EVENT_HIT, EVENT_REPAIR } from './world.js';
+import { ACTION_CONFIRM, ACTION_PAUSE, ACTION_ENTER, ACTION_PUNCH, ACTION_MUTE, ACTION_REPAIR, ACTION_SWITCH, createInput } from './input.js';
 import { createRenderer, SCREEN_OVER, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE, SCREEN_COMPLETE } from './render.js';
 import { createAudio } from './audio.js';
 import { stageShot } from './shots.js';
@@ -104,7 +104,7 @@ function runGame() {
     screen = SCREEN_PLAY;
     audio.unlock();
     audio.startMusic();
-    announce('Playing. Steal a car — the first job is waiting.');
+    announce('Playing. Steal a car — the first of eight jobs is waiting.');
   }
 
   function endRun(title) {
@@ -123,6 +123,7 @@ function runGame() {
     if (events & EVENT_SHOT) audio.shot();
     if (events & EVENT_PUNCH) audio.punch();
     if (events & EVENT_PICKUP) audio.pickup();
+    if (events & EVENT_REPAIR) audio.cash();
     if (events & EVENT_EXPLOSION) audio.explosion();
     if (events & EVENT_WANTED_UP) audio.sting();
     if (events & EVENT_HIT) {
@@ -148,9 +149,10 @@ function runGame() {
     }
   }
 
-  // One-shot presses the world itself consumes (steal a car, punch): the
-  // loop takes the input's actions once per frame and hands them to the
-  // first step, so a press is never lost and never counted twice.
+  // One-shot presses the world itself consumes (steal a car, punch, repair,
+  // switch weapon): the loop takes the input's actions once per frame and
+  // hands them to the first step, so a press is never lost and never counted
+  // twice.
   let frameActions = 0;
 
   function handleActions() {
@@ -160,7 +162,7 @@ function runGame() {
       announce(muted ? 'Muted.' : 'Sound on.');
       return;
     }
-    frameActions |= actions & (ACTION_ENTER | ACTION_PUNCH);
+    frameActions |= actions & (ACTION_ENTER | ACTION_PUNCH | ACTION_REPAIR | ACTION_SWITCH);
     if (actions & ACTION_CONFIRM && (screen === SCREEN_TITLE || screen === SCREEN_OVER || screen === SCREEN_COMPLETE)) {
       startGame();
     } else if (actions & ACTION_PAUSE && screen === SCREEN_PLAY) {

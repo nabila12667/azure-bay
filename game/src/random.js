@@ -10,3 +10,11 @@ export function createRandom(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+/** A deterministic 0..1 value for a pair of coordinates: stable window
+ * layouts, lit windows and decorations that never flicker between frames. */
+export function hash2(x, y) {
+  let h = (Math.floor(x) * 374761393 + Math.floor(y) * 668265263) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return (((h ^ (h >>> 16)) >>> 0) % 10000) / 10000;
+}

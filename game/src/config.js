@@ -12,6 +12,9 @@ export const VIEW = { width: 1280, height: 720 };
 export const SAVE_KEY = 'azure-bay.save.v1';
 export const BEST_KEY = 'azure-bay.best';
 
+/** A full day lasts four minutes of play; the city shifts day, dusk, night, dawn. */
+export const DAY_LENGTH = 240;
+
 export const PLAYER = {
   radius: 14,
   walkSpeed: 250,
@@ -24,6 +27,24 @@ export const PLAYER = {
   pistolCooldown: 0.22,
   pistolMag: 12,
   pistolRange: 520,
+  shotgunDamage: 14,
+  shotgunPellets: 5,
+  shotgunSpread: 0.15,
+  shotgunCooldown: 0.75,
+  shotgunRange: 420,
+};
+
+/** Per-kind driving character: top speed, acceleration and body length. */
+export const CAR_KINDS = {
+  sedan: { maxSpeed: 560, accel: 460, length: 64 },
+  taxi: { maxSpeed: 560, accel: 460, length: 64 },
+  van: { maxSpeed: 500, accel: 400, length: 72 },
+  truck: { maxSpeed: 470, accel: 380, length: 78 },
+  sports: { maxSpeed: 650, accel: 540, length: 62 },
+  muscle: { maxSpeed: 610, accel: 520, length: 66 },
+  limo: { maxSpeed: 540, accel: 400, length: 88 },
+  armored: { maxSpeed: 520, accel: 430, length: 74 },
+  police: { maxSpeed: 620, accel: 500, length: 64 },
 };
 
 export const CAR = {
@@ -39,6 +60,19 @@ export const CAR = {
   health: 100,
   enterRadius: 70,
 };
+
+/** Rosa's Garage: what a repair and each tuning level cost. */
+export const GARAGE = {
+  repairCost: 150,
+  tuneCost: 300,
+  maxTune: 3,
+  tuneSpeedBonus: 0.08,
+  tuneAccelBonus: 0.1,
+};
+
+/** Hidden stashes around the city; finding them all pays a bonus. */
+export const STASH_TOTAL = 12;
+export const STASH_BONUS = 1000;
 
 export const PED = { radius: 11, walkSpeed: 70, runSpeed: 210 };
 
@@ -74,6 +108,9 @@ export const PALETTE = {
   police: '#3a6fd8',
   marker: '#ffd23a',
   health: '#58d68d',
+  night: 'rgba(8, 12, 30, 0.48)',
+  headlight: 'rgba(255, 230, 150, 0.10)',
+  litWindow: '#ffd97a',
 };
 
 export const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
@@ -89,5 +126,7 @@ export const PLACES = {
   policeHQ: { x: 2280, y: 380, name: 'Police HQ' },
   lighthouse: { x: 3520, y: 2450, name: 'Lighthouse' },
   plaza: { x: 1920, y: 1500, name: 'Downtown Plaza' },
+  bank: { x: 2240, y: 1500, name: 'Azure Bank' },
+  marina: { x: 3360, y: 2320, name: 'Marina' },
   playerStart: { x: 1600, y: 1280 },
 };

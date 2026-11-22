@@ -3,6 +3,11 @@
 // collision and road helpers every moving thing uses. The layout is fixed
 // (roads on a grid, landmarks at named corners); only the buildings' sizes
 // and colours come from the seeded random, so the city is the same every run.
+//
+// The city has four districts — Old Town in the west, Downtown in the
+// middle, the Harbor in the east, and the Marina on the southern beach —
+// plus a park, a plaza with a fountain, and two mansions with pools in the
+// North Hills.
 
 import { WORLD } from './config.js';
 
@@ -14,6 +19,15 @@ export const ROADS_Y = [320, 800, 1280, 1760, 2240];
 
 const ROOF_COLOURS = ['#c96f4a', '#d9a05b', '#7fb3a3', '#b08968', '#e07a5f', '#8fa8c8', '#c9b458'];
 const WALL_COLOURS = ['#e8dcc8', '#f2e6d0', '#dfe8dd', '#ead9c2', '#e3d3e0'];
+
+/** The district a point in the city belongs to, for the HUD and minimap. */
+export function districtOf(x, y) {
+  if (y >= 2400) return 'Beach';
+  if (x >= 3200 && y >= 2000) return 'Marina';
+  if (x < 1280) return 'Old Town';
+  if (x < 2560) return 'Downtown';
+  return 'Harbor';
+}
 
 function overlapsRoad(x, y, w, h) {
   const half = ROAD_WIDTH / 2 + 8;
@@ -33,6 +47,7 @@ export function createCity(random) {
   // (2240-2880 x 1280-1760) stay open; the beach is the southern strip.
   const park = { x: 1650, y: 850, w: 540, h: 380 };
   const plaza = { x: 2290, y: 1330, w: 540, h: 380 };
+  const fountain = { x: 2560, y: 1520, r: 42 };
   const beachY = 2400;
 
   for (let gx = 0; gx < ROADS_X.length - 1; gx += 1) {
@@ -68,10 +83,21 @@ export function createCity(random) {
             wall: WALL_COLOURS[Math.floor(random() * WALL_COLOURS.length)],
             roof: ROOF_COLOURS[Math.floor(random() * ROOF_COLOURS.length)],
             district: gx < 2 ? 'Old Town' : gx < 4 ? 'Downtown' : 'Harbor',
+            floors: 1 + Math.floor(random() * 3),
+            seed: random(),
           });
         }
       }
     }
+  }
+
+  // Two mansions with pools in the North Hills (the north-east blocks).
+  const mansions = [
+    { x: 3050, y: 430, w: 240, h: 170, wall: '#f2e6d0', roof: '#8fa8c8', district: 'Harbor', floors: 2, seed: 0.31, pool: { x: 3070, y: 620, w: 120, h: 46 } },
+    { x: 3050, y: 910, w: 220, h: 160, wall: '#e8dcc8', roof: '#c96f4a', district: 'Harbor', floors: 2, seed: 0.77, pool: { x: 3070, y: 1090, w: 110, h: 42 } },
+  ];
+  for (const m of mansions) {
+    if (!overlapsRoad(m.x, m.y, m.w, m.h)) buildings.push(m);
   }
 
   // Palm trees along the beach and a few on the plaza.
@@ -82,7 +108,18 @@ export function createCity(random) {
     trees.push({ x: plaza.x + 30 + random() * (plaza.w - 60), y: plaza.y + 30 + random() * (plaza.h - 60), r: 11 });
   }
 
-  return { buildings, trees, park, plaza, beachY };
+  // The Marina: wooden docks reaching into the water off the south-east
+  // beach, with boats moored alongside them.
+  const docks = [];
+  const boats = [];
+  for (let i = 0; i < 3; i += 1) {
+    const dx = 3180 + i * 260;
+    docks.push({ x: dx, y: 2420, w: 26, h: 120 });
+    boats.push({ x: dx + 60, y: 2500, angle: Math.PI / 2 + (random() - 0.5) * 0.2, hull: ['#e8e4da', '#d94f3d', '#3d7dd9'][i] });
+    boats.push({ x: dx - 40, y: 2520, angle: -Math.PI / 2 + (random() - 0.5) * 0.2, hull: '#7fbf5a' });
+  }
+
+  return { buildings, trees, park, plaza, fountain, beachY, docks, boats };
 }
 
 /** True when the circle at (x, y) with radius r touches a building. */

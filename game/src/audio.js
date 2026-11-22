@@ -132,6 +132,14 @@ export function createAudio() {
       noise(0.12, 0.35, 2500);
       tone(180, 0.08, 'square', 0.12);
     },
+    shotgun() {
+      noise(0.3, 0.5, 900);
+      tone(90, 0.25, 'square', 0.25);
+      tone(55, 0.3, 'sine', 0.3);
+    },
+    beep() {
+      tone(880, 0.12, 'sine', 0.22);
+    },
     punch() {
       noise(0.08, 0.25, 500);
       tone(90, 0.1, 'sine', 0.25);

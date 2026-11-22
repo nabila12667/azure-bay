@@ -3,18 +3,23 @@
 // the police, the rivals, the bullets and the missions. step() takes the
 // input and returns what happened as bit flags, so the caller can react
 // (sounds, screens, saves) without the world knowing about them.
+//
+// The world also runs the clock: a four-minute day that slides from day
+// through dusk into night and back to dawn, and rain that comes and goes.
+// Night brings headlights and lit windows; rain brings umbrellas out and
+// streaks across the screen.
 
-import { CAR, PLACES, STEP, WORLD } from './config.js';
-import { createCity, nearestRoadPoint, randomIntersection, resolveBuildings } from './city.js';
+import { CAR, PLACES, STEP, WORLD, GARAGE, STASH_TOTAL, STASH_BONUS, DAY_LENGTH } from './config.js';
+import { createCity, nearestRoadPoint, randomIntersection, resolveBuildings, districtOf } from './city.js';
 import { createRandom } from './random.js';
-import { createPlayer, updatePlayer, nearestEnterableCar, enterCar, exitCar, hurtPlayer } from './player.js';
+import { createPlayer, updatePlayer, nearestEnterableCar, enterCar, exitCar, hurtPlayer, switchWeapon } from './player.js';
 import { createCar, driveCar, updateTraffic, collideCars, collideWorld, spawnTrafficCar, KIND_POLICE } from './vehicles.js';
 import { createPedestrian, updatePedestrians, frighten, hitByCar } from './pedestrians.js';
 import { createPolice, addWanted, setWanted, updatePolice, clearPolice } from './police.js';
-import { createCombat, updateBullets, updateParticles, updatePickups, addPickup, explode, spawnParticles, PICKUP_HEALTH, PICKUP_AMMO, PICKUP_CASH } from './combat.js';
+import { createCombat, updateBullets, updateParticles, updatePickups, addPickup, explode, spawnParticles, spawnSkid, PICKUP_HEALTH, PICKUP_AMMO, PICKUP_CASH, PICKUP_SHELLS, PICKUP_STASH } from './combat.js';
 import { updateRivals, aliveRivals } from './rivals.js';
-import { ACTION_ENTER, ACTION_PUNCH } from './input.js';
-import { createMissions, currentMission, startMission, updateMissions, objectiveText, missionMarker, retryMission, showBanner } from './missions.js';
+import { ACTION_ENTER, ACTION_PUNCH, ACTION_REPAIR, ACTION_SWITCH } from './input.js';
+import { createMissions, currentMission, startMission, updateMissions, objectiveText, missionMarker, retryMission, showBanner, MISSION_COUNT } from './missions.js';
 import { loadSave, saveGame } from './save.js';
 
 export const EVENT_BUSTED = 1;
@@ -27,15 +32,33 @@ export const EVENT_PUNCH = 64;
 export const EVENT_PICKUP = 128;
 export const EVENT_EXPLOSION = 256;
 export const EVENT_HIT = 512;
+export const EVENT_REPAIR = 1024;
 
-const TRAFFIC_TARGET = 14;
-const PED_TARGET = 24;
+const TRAFFIC_TARGET = 18;
+const PED_TARGET = 30;
 
 const STASH_SPOTS = [
   { x: 420, y: 900 }, { x: 1060, y: 1400 }, { x: 1700, y: 420 },
   { x: 2340, y: 900 }, { x: 2980, y: 1400 }, { x: 3620, y: 1900 },
   { x: 420, y: 1900 }, { x: 1700, y: 1900 },
+  { x: 1060, y: 420 }, { x: 2980, y: 420 }, { x: 2340, y: 1900 }, { x: 3620, y: 420 },
 ];
+
+/** How dark the city is, 0 (day) to 1 (night), from the time of day. */
+export function nightFactor(dayTime) {
+  if (dayTime < 0.4 || dayTime >= 0.9) return 0;
+  if (dayTime < 0.5) return (dayTime - 0.4) / 0.1;
+  if (dayTime < 0.8) return 1;
+  return 1 - (dayTime - 0.8) / 0.1;
+}
+
+export function timeOfDayLabel(dayTime) {
+  if (dayTime < 0.4) return 'DAY';
+  if (dayTime < 0.5) return 'DUSK';
+  if (dayTime < 0.8) return 'NIGHT';
+  if (dayTime < 0.9) return 'DAWN';
+  return 'DAY';
+}
 
 export function createWorld(seed) {
   const random = createRandom(seed);
@@ -50,15 +73,21 @@ export function createWorld(seed) {
     peds: [],
     rivals: [],
     time: 0,
+    dayTime: 0.08,
+    rain: 0,
+    rainTarget: 0,
+    rainTimer: 40,
+    district: 'Downtown',
     messages: [],
     bannerTitle: '',
     bannerText: '',
     bannerTimer: 0,
-    objectiveText: 'First Wheels: Steal any car',
+    objectiveText: 'Job 1/8 — First Wheels: Steal any car',
     missionTimer: 0,
     marker: null,
     crateAt: null,
     hint: '',
+    garagePrompt: '',
     hasSave: false,
     damageFlash: 0,
     overTitle: 'BUSTED',
@@ -66,13 +95,14 @@ export function createWorld(seed) {
     pulledDriver: null,
     saveTimer: 0,
     pickupTimer: 0,
-    stats: { carsStolen: 0, pedsDown: 0, shotsFired: 0 },
+    stats: { carsStolen: 0, pedsDown: 0, shotsFired: 0, stashesFound: 0 },
   };
   seedTraffic(state);
   seedPeds(state);
   seedStashes(state);
   addPickup(combat, PICKUP_HEALTH, PLACES.hospital.x + 40, PLACES.hospital.y, 40);
   addPickup(combat, PICKUP_AMMO, PLACES.garage.x + 40, PLACES.garage.y, 24);
+  addPickup(combat, PICKUP_SHELLS, PLACES.garage.x + 80, PLACES.garage.y, 12);
   return state;
 }
 
@@ -104,7 +134,7 @@ function seedPeds(state) {
 
 function seedStashes(state) {
   for (const spot of STASH_SPOTS) {
-    addPickup(state.combat, PICKUP_CASH, spot.x, spot.y, 100);
+    addPickup(state.combat, PICKUP_STASH, spot.x, spot.y, 100);
   }
 }
 
@@ -151,6 +181,17 @@ function collectPickups(state) {
       } else if (p.kind === PICKUP_AMMO) {
         player.ammo += p.value;
         addMessage(state, `+${p.value} pistol ammo`, '#ffd23a');
+      } else if (p.kind === PICKUP_SHELLS) {
+        player.shells += p.value;
+        addMessage(state, `+${p.value} shotgun shells`, '#ffd23a');
+      } else if (p.kind === PICKUP_STASH) {
+        player.cash += p.value;
+        state.stats.stashesFound += 1;
+        addMessage(state, `Stash ${state.stats.stashesFound}/${STASH_TOTAL} — +$${p.value}`, '#ffd23a');
+        if (state.stats.stashesFound >= STASH_TOTAL) {
+          player.cash += STASH_BONUS;
+          addMessage(state, `All ${STASH_TOTAL} stashes — bonus $${STASH_BONUS}!`, '#58d68d');
+        }
       } else {
         player.cash += p.value;
         addMessage(state, `+$${p.value} stash`, '#ffd23a');
@@ -181,9 +222,14 @@ export function resetWorld(state, keepProgress) {
   player.inCar = null;
   player.invulnerable = 0;
   player.ammo = keepProgress && player.hasPistol ? player.ammo : 0;
+  player.shells = keepProgress && player.hasShotgun ? player.shells : 0;
   if (!keepProgress) {
     player.cash = 0;
     player.hasPistol = false;
+    player.hasShotgun = false;
+    player.weapon = null;
+    player.tuning = 0;
+    state.stats.stashesFound = 0;
     state.missions = createMissions();
   }
   clearPolice(state.police);
@@ -201,16 +247,21 @@ export function applySave(state, save) {
   player.cash = save.cash || 0;
   player.health = save.health || 100;
   player.hasPistol = !!save.hasPistol;
+  player.hasShotgun = !!save.hasShotgun;
+  player.weapon = save.weapon || (player.hasPistol ? 'pistol' : null);
   player.ammo = save.ammo || 0;
+  player.shells = save.shells || 0;
+  player.tuning = save.tuning || 0;
+  state.stats.stashesFound = save.stashesFound || 0;
   player.x = save.x || PLACES.playerStart.x;
   player.y = save.y || PLACES.playerStart.y;
   state.missions.index = save.missionIndex || 0;
-  state.missions.storyComplete = state.missions.index >= 5;
+  state.missions.storyComplete = state.missions.index >= MISSION_COUNT;
   state.hasSave = true;
 }
 
 /** One fixed step. `actionBits` carries the one-shot presses for this step
- * (ENTER / PUNCH), taken once by the caller — the loop takes the input's
+ * (ENTER / PUNCH / REPAIR / SWITCH), taken once by the caller — the loop takes the input's
  * actions a single time per frame and hands them to the first step, so a
  * press is never lost and never counted twice. Returns events as bit flags. */
 export function stepWorld(state, dt, input, aimAngle, actionBits) {
@@ -219,6 +270,16 @@ export function stepWorld(state, dt, input, aimAngle, actionBits) {
   const pressed = actionBits || 0;
   state.time += dt;
   state.damageFlash = Math.max(0, state.damageFlash - dt * 2);
+
+  // The clock: day slides into night, and the rain comes and goes.
+  state.dayTime = (state.dayTime + dt / DAY_LENGTH) % 1;
+  state.rainTimer -= dt;
+  if (state.rainTimer <= 0) {
+    state.rainTimer = 30 + state.random() * 40;
+    state.rainTarget = state.rainTarget > 0.5 ? 0 : 1;
+  }
+  state.rain += (state.rainTarget - state.rain) * Math.min(1, dt * 0.5);
+  state.district = districtOf(player.x, player.y);
 
   // Messages age out.
   for (const msg of state.messages) msg.life -= dt;
@@ -232,7 +293,12 @@ export function stepWorld(state, dt, input, aimAngle, actionBits) {
     const throttle = move.y < 0 ? 1 : move.y > 0 ? -1 : 0;
     const steer = move.x;
     const brake = move.y > 0 && car.speed > 5;
-    driveCar(car, dt, throttle, steer, brake);
+    const wasSpeed = car.speed;
+    driveCar(car, dt, throttle, steer, brake, player.tuning);
+    // Hard braking at speed leaves skid marks on the asphalt.
+    if (brake && Math.abs(wasSpeed) > 300 && state.random() < 0.6) {
+      spawnSkid(state.combat, car.x - Math.cos(car.angle) * 20, car.y - Math.sin(car.angle) * 20);
+    }
     collideWorld(car, state.city);
     player.x = car.x;
     player.y = car.y;
@@ -256,6 +322,49 @@ export function stepWorld(state, dt, input, aimAngle, actionBits) {
       frighten(state.peds, player.x, player.y, 420);
     }
     if (acted.punched) events |= EVENT_PUNCH;
+  }
+
+  // --- Switch weapon (Q) while on foot.
+  if ((pressed & ACTION_SWITCH) && !player.inCar) {
+    const next = switchWeapon(player);
+    if (next) addMessage(state, next === 'shotgun' ? 'Shotgun ready' : 'Pistol ready', '#ffd23a');
+  }
+
+  // --- Rosa's Garage (R): repair the car, or tune it when it is whole.
+  state.garagePrompt = '';
+  if (player.inCar) {
+    const gd = Math.hypot(player.x - PLACES.garage.x, player.y - PLACES.garage.y);
+    if (gd < 140) {
+      const car = player.inCar;
+      if (car.hp < 100) {
+        state.garagePrompt = `R — repair $${GARAGE.repairCost}`;
+        if (pressed & ACTION_REPAIR) {
+          if (player.cash >= GARAGE.repairCost) {
+            player.cash -= GARAGE.repairCost;
+            car.hp = 100;
+            car.burning = 0;
+            events |= EVENT_REPAIR;
+            addMessage(state, 'Rosa fixed the car — good as new', '#58d68d');
+          } else {
+            addMessage(state, `Need $${GARAGE.repairCost} for a repair`, '#ff5a4e');
+          }
+        }
+      } else if (player.tuning < GARAGE.maxTune) {
+        state.garagePrompt = `R — tune Lv${player.tuning + 1} $${GARAGE.tuneCost}`;
+        if (pressed & ACTION_REPAIR) {
+          if (player.cash >= GARAGE.tuneCost) {
+            player.cash -= GARAGE.tuneCost;
+            player.tuning += 1;
+            events |= EVENT_REPAIR;
+            addMessage(state, `Rosa tuned the ride — Lv${player.tuning}`, '#58d68d');
+          } else {
+            addMessage(state, `Need $${GARAGE.tuneCost} for tuning`, '#ff5a4e');
+          }
+        }
+      } else {
+        state.garagePrompt = 'Rosa\u2019s Garage — fully tuned';
+      }
+    }
   }
 
   // --- Enter or exit a car (the one-shot press, handed in by the loop).
@@ -332,7 +441,7 @@ export function stepWorld(state, dt, input, aimAngle, actionBits) {
       if (hit.target.hp <= 0) {
         hit.target.state = 'dead';
         addPickup(state.combat, PICKUP_CASH, hit.target.x, hit.target.y, 50);
-        addMessage(state, 'Gull down', '#ffd23a');
+        addMessage(state, hit.target.kind === 'guard' ? 'Guard down' : 'Gull down', '#ffd23a');
       }
     } else if (hit.kind === 'cop') {
       hit.target.hp -= hit.damage;
@@ -376,8 +485,10 @@ export function stepWorld(state, dt, input, aimAngle, actionBits) {
     state.pickupTimer = 30;
     const hasHealth = state.combat.pickups.some((p) => p.kind === PICKUP_HEALTH && !p.taken);
     const hasAmmo = state.combat.pickups.some((p) => p.kind === PICKUP_AMMO && !p.taken);
+    const hasShells = state.combat.pickups.some((p) => p.kind === PICKUP_SHELLS && !p.taken);
     if (!hasHealth) addPickup(state.combat, PICKUP_HEALTH, PLACES.hospital.x + 40, PLACES.hospital.y, 40);
     if (!hasAmmo) addPickup(state.combat, PICKUP_AMMO, PLACES.garage.x + 40, PLACES.garage.y, 24);
+    if (!hasShells) addPickup(state.combat, PICKUP_SHELLS, PLACES.garage.x + 80, PLACES.garage.y, 12);
   }
 
   // --- The safehouse clears the heat fast.
@@ -405,6 +516,9 @@ export function stepWorld(state, dt, input, aimAngle, actionBits) {
   } else if (missionEvents.completed) {
     events |= EVENT_MISSION_DONE;
     addMessage(state, `Mission complete — $${missionEvents.reward}`, '#ffd23a');
+    if (mission.id === 'night-courier') {
+      addMessage(state, 'Mara gave you the shotgun — Q to switch', '#58d68d');
+    }
     const next = currentMission(state.missions);
     if (next) {
       state.missions.state = 'idle';
@@ -421,11 +535,13 @@ export function stepWorld(state, dt, input, aimAngle, actionBits) {
 
   // --- Context hint.
   state.hint = '';
-  if (!player.inCar) {
+  if (state.garagePrompt) {
+    state.hint = state.garagePrompt;
+  } else if (!player.inCar) {
     const car = nearestEnterableCar(player, state.cars);
     if (state.crateAt && Math.hypot(player.x - state.crateAt.x, player.y - state.crateAt.y) < 80) state.hint = 'Walk over the crate to pick it up';
     else if (car) state.hint = car.driver ? 'E — steal the car' : 'E — get in the car';
-    else if (player.hasPistol) state.hint = 'Click — shoot · SPACE — punch · SHIFT — sprint';
+    else if (player.weapon) state.hint = 'Click — shoot · Q — switch weapon · SPACE — punch · SHIFT — sprint';
     else state.hint = 'WASD — walk · SPACE — punch · E — get in a car';
   } else {
     state.hint = 'WASD — drive · S — brake/reverse · E — get out';

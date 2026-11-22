@@ -1,12 +1,13 @@
 // Pedestrians: the people who make Azure Bay feel alive. They stroll along
 // the sidewalks, cross at intersections, and run away from gunfire, speeding
 // cars and police chases. A pedestrian hit by a fast car is knocked down and
-// the driver's wanted level rises.
+// the driver's wanted level rises. A quarter of them carry umbrellas, which
+// come out when the rain starts.
 
 import { PED } from './config.js';
 import { ROADS_X, ROADS_Y, randomIntersection, resolveBuildings, clampToWorld } from './city.js';
 
-const SHIRTS = ['#e07856', '#5b8dd9', '#e8b93c', '#7fbf5a', '#c96f9a', '#8a6fd6', '#e8e4da', '#3aa7a0'];
+const SHIRTS = ['#e07856', '#5b8dd9', '#e8b93c', '#7fbf5a', '#c96f9a', '#8a6fd6', '#e8e4da', '#3aa7a0', '#d94f3d', '#f2e6d0'];
 const SKINS = ['#e8b98a', '#c98d5f', '#8a5a3b', '#f0c8a0'];
 
 let nextId = 1;
@@ -20,6 +21,7 @@ export function createPedestrian(x, y, random) {
     target: randomIntersection(random, x, y, 300),
     shirt: SHIRTS[Math.floor(random() * SHIRTS.length)],
     skin: SKINS[Math.floor(random() * SKINS.length)],
+    umbrella: random() < 0.25,
     r: PED.radius,
     state: 'walk', // walk | flee | down
     downTimer: 0,

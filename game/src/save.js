@@ -1,7 +1,8 @@
-// Saving: Leo's cash, health, weapons, position and mission progress, in
-// this browser's localStorage. Nothing leaves the machine. A save is read
-// once at boot (the title screen offers to continue) and written every ten
-// seconds of play and on every mission payout.
+// Saving: Leo's cash, health, weapons, tuning, stashes, position and
+// mission progress, in this browser's localStorage. Nothing leaves the
+// machine. A save is read once at boot (the title screen offers to
+// continue) and written every ten seconds of play and on every mission
+// payout.
 
 import { SAVE_KEY } from './config.js';
 
@@ -24,7 +25,12 @@ export function saveGame(state) {
       cash: Math.floor(player.cash),
       health: Math.max(1, Math.floor(player.health)),
       hasPistol: player.hasPistol,
+      hasShotgun: player.hasShotgun,
+      weapon: player.weapon,
       ammo: player.ammo,
+      shells: player.shells,
+      tuning: player.tuning || 0,
+      stashesFound: state.stats.stashesFound || 0,
       x: Math.floor(player.x),
       y: Math.floor(player.y),
       missionIndex: state.missions.index,

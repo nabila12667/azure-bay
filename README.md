@@ -4,14 +4,24 @@
 [![rank](https://make.fun/badge/gta6-01/nabila12667/azure-bay/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 [![reward](https://make.fun/badge/gta6-01/nabila12667/azure-bay/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 
-Azure Bay is an original top-down open-world crime game that runs entirely in the browser: steal cars, outrun the police, and run five jobs for fixer Mara Voss across a living city. No libraries, no network requests, nothing from Rockstar or any commercial game.
+Azure Bay is an original top-down open-world crime game that runs entirely in the browser: steal cars, outrun the police, and run eight jobs for fixer Mara Voss across a living city. No libraries, no network requests, nothing from Rockstar or any commercial game.
 
 ## Screenshots
 
-![5-star chase](screenshots/1-chase.jpg)
-![Driving to Rosa's Garage](screenshots/2-drive.jpg)
-![Dockside Trouble firefight](screenshots/3-mission.jpg)
-![Title screen](screenshots/4-start.jpg)
+![The Azure Heist](screenshots/1-heist.jpg)
+![Bay Street Grand Prix at night in the rain](screenshots/2-race.jpg)
+![Three-star chase](screenshots/3-chase.jpg)
+![Night drive through the Marina](screenshots/4-night.jpg)
+
+## What's new in round 3
+
+- **Three new jobs (eight in all):** the Night Courier (a timed delivery run that earns the shotgun), the Bay Street Grand Prix (an illegal street race through six gates), and the finale — the Azure Heist, six bank guards and the whole ABPD on Leo's tail.
+- **Rosa's Garage:** press R near the garage to repair a car ($150) or tune it up to Lv3 ($300 a level — faster whatever Leo drives next).
+- **A shotgun** with a five-pellet spread (Q switches between the guns Leo owns) and shells to find.
+- **Twelve hidden stashes** around the city, tracked on the HUD and the minimap; finding them all pays a $1,000 bonus.
+- **A living clock:** a four-minute day that slides through dusk into night and back to dawn, with headlights, lit windows and streetlights after dark — and rain that comes and goes, umbrellas out.
+- **A bigger city:** the Marina district with docks and boats, mansions with pools in the North Hills, a fountain in Downtown Plaza, and new cars — muscle cars, limos and an armored van.
+- **A richer HUD:** gun and ammo, stash count, tuning level, district and time of day, the car's health while driving, and a minimap with district names, stash dots and rivals.
 
 ## Run it
 
@@ -19,7 +29,15 @@ Azure Bay is an original top-down open-world crime game that runs entirely in th
 node serve.ts
 ```
 
-Then open http://localhost:8080 — WASD to move and drive, mouse to aim, click to shoot, E to steal or exit a car, Space to punch, Shift to sprint, P to pause, M to mute.
+Then open http://localhost:8080 — WASD to move and drive, mouse to aim, click to shoot, E to steal or exit a car, Space to punch, Shift to sprint, R to repair or tune at Rosa's Garage, Q to switch weapon, P to pause, M to mute.
+
+## Tests
+
+```sh
+node game/tests.mjs
+```
+
+Headless logic tests for the missions, the garage, the shotgun, the stashes, the wanted level, the day/night cycle and the save.
 
 ---
 

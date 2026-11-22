@@ -38,6 +38,7 @@ const MIME: Record<string, string> = {
 };
 
 createServer((request, response) => {
+  const isHead = request.method === 'HEAD';
   const url = new URL(request.url ?? '/', 'http://localhost');
   let pathname: string;
   try {
@@ -66,6 +67,10 @@ createServer((request, response) => {
     'content-length': size,
     'cache-control': 'no-store',
   });
+  if (isHead) {
+    response.end();
+    return;
+  }
   createReadStream(file).pipe(response);
 }).listen(port, '127.0.0.1', () => {
   console.log(`game/ is on http://localhost:${port}`);

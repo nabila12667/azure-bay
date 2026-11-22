@@ -4,10 +4,17 @@
 // through the camera; the HUD and the menu screens are drawn in the fixed
 // 1280x720 logical view, scaled to fit the window. Nothing here changes
 // the world — it only reads it, so a frame can never corrupt a step.
+//
+// Light and weather are painted here too: as the day slides into night the
+// city darkens, windows light up, streetlights glow and headlights cut
+// through the dark; when the rain comes, streaks cross the screen and the
+// umbrellas come out.
 
-import { FONT, PALETTE, VIEW, WORLD } from './config.js';
+import { FONT, PALETTE, VIEW, WORLD, CAR_KINDS } from './config.js';
 import { ROADS_X, ROADS_Y, ROAD_WIDTH } from './city.js';
 import { drawHud } from './hud.js';
+import { nightFactor } from './world.js';
+import { hash2 } from './random.js';
 
 export const SCREEN_TITLE = 0;
 export const SCREEN_PLAY = 1;
@@ -89,6 +96,66 @@ export function createRenderer(canvas) {
     ctx.restore();
   }
 
+  /** World point -> logical view point, for overlays that follow the camera. */
+  function worldToView(x, y) {
+    return { x: VIEW.width / 2 + (x - camera.x) * camera.zoom, y: VIEW.height / 2 + (y - camera.y) * camera.zoom };
+  }
+
+  /** Night darkness, headlight cones, streetlight glow, and rain streaks. */
+  function drawNightAndRain(state) {
+    const night = nightFactor(state.dayTime);
+    withView(() => {
+      if (night > 0.02) {
+        ctx.fillStyle = `rgba(8, 12, 30, ${(0.48 * night).toFixed(3)})`;
+        ctx.fillRect(0, 0, VIEW.width, VIEW.height);
+        // Headlights: pale cones ahead of Leo's car and the cruisers.
+        ctx.globalCompositeOperation = 'lighter';
+        const cars = [state.player.inCar, ...state.police.cars].filter(Boolean);
+        for (const car of cars) {
+          const p = worldToView(car.x, car.y);
+          if (p.x < -200 || p.x > VIEW.width + 200 || p.y < -200 || p.y > VIEW.height + 200) continue;
+          const fx = Math.cos(car.angle);
+          const fy = Math.sin(car.angle);
+          const reach = 220 * camera.zoom;
+          const spread = 0.26;
+          ctx.fillStyle = `rgba(255, 230, 150, ${(0.06 * night).toFixed(3)})`;
+          ctx.beginPath();
+          ctx.moveTo(p.x + fx * 30 * camera.zoom, p.y + fy * 30 * camera.zoom);
+          const left = Math.atan2(fy, fx) - spread;
+          const right = Math.atan2(fy, fx) + spread;
+          ctx.lineTo(p.x + Math.cos(left) * reach, p.y + Math.sin(left) * reach);
+          ctx.lineTo(p.x + Math.cos(right) * reach, p.y + Math.sin(right) * reach);
+          ctx.closePath();
+          ctx.fill();
+        }
+        // Streetlights glow at every intersection.
+        for (const rx of ROADS_X) {
+          for (const ry of ROADS_Y) {
+            const p = worldToView(rx, ry);
+            if (p.x < -40 || p.x > VIEW.width + 40 || p.y < -40 || p.y > VIEW.height + 40) continue;
+            ctx.fillStyle = `rgba(255, 220, 130, ${(0.10 * night).toFixed(3)})`;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 18 * camera.zoom, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.globalCompositeOperation = 'source-over';
+      }
+      if (state.rain > 0.05) {
+        ctx.strokeStyle = `rgba(180, 200, 220, ${(0.28 * state.rain).toFixed(3)})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        for (let i = 0; i < 90; i += 1) {
+          const x = (i * 137.5 + state.time * 120) % 1360 - 40;
+          const y = (i * 89.3 + state.time * 900) % 800 - 40;
+          ctx.moveTo(x, y);
+          ctx.lineTo(x - 6, y + 18);
+        }
+        ctx.stroke();
+      }
+    });
+  }
+
   function drawGround(state, v) {
     const city = state.city;
     ctx.fillStyle = PALETTE.grass;
@@ -104,11 +171,59 @@ export function createRenderer(canvas) {
       ctx.arc(x + 60 + Math.sin(state.time * 1.2 + x) * 20, 2520, 26, 0, Math.PI);
       ctx.fill();
     }
-    // Park and plaza.
+    // Marina docks and moored boats.
+    for (const dock of city.docks) {
+      ctx.fillStyle = '#8a6d3b';
+      ctx.fillRect(dock.x, dock.y, dock.w, dock.h);
+      ctx.fillStyle = '#6b5227';
+      for (let y = dock.y + 8; y < dock.y + dock.h; y += 16) ctx.fillRect(dock.x, y, dock.w, 3);
+    }
+    for (const boat of city.boats) {
+      ctx.save();
+      ctx.translate(boat.x, boat.y);
+      ctx.rotate(boat.angle);
+      ctx.fillStyle = boat.hull;
+      ctx.beginPath();
+      ctx.roundRect(-26, -9, 52, 18, 8);
+      ctx.fill();
+      ctx.fillStyle = '#202a36';
+      ctx.fillRect(-4, -3, 12, 6);
+      ctx.strokeStyle = '#5a451f';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, -6);
+      ctx.lineTo(0, -26);
+      ctx.stroke();
+      ctx.fillStyle = '#f2ede0';
+      ctx.beginPath();
+      ctx.moveTo(0, -26);
+      ctx.lineTo(0, -6);
+      ctx.lineTo(14, -6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+    // Park and plaza, with the fountain in the plaza.
     ctx.fillStyle = PALETTE.park;
     ctx.fillRect(city.park.x, city.park.y, city.park.w, city.park.h);
     ctx.fillStyle = '#d9cba8';
     ctx.fillRect(city.plaza.x, city.plaza.y, city.plaza.w, city.plaza.h);
+    const f = city.fountain;
+    ctx.fillStyle = '#b9c4c9';
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#3aa7c9';
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, f.r - 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#8fd4e8';
+    for (let i = 0; i < 6; i += 1) {
+      const a = state.time * 1.5 + (i * Math.PI) / 3;
+      ctx.beginPath();
+      ctx.arc(f.x + Math.cos(a) * 16, f.y + Math.sin(a) * 16, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
     // Trees.
     for (const tree of city.trees) {
       if (tree.x < v.x - 40 || tree.x > v.x + v.w + 40 || tree.y < v.y - 40 || tree.y > v.y + v.h + 40) continue;
@@ -158,6 +273,7 @@ export function createRenderer(canvas) {
   }
 
   function drawBuildings(state, v) {
+    const night = nightFactor(state.dayTime);
     for (const b of state.city.buildings) {
       if (b.x > v.x + v.w + 40 || b.x + b.w < v.x - 40 || b.y > v.y + v.h + 40 || b.y + b.h < v.y - 40) continue;
       ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
@@ -169,10 +285,28 @@ export function createRenderer(canvas) {
       ctx.strokeStyle = 'rgba(0,0,0,0.18)';
       ctx.lineWidth = 2;
       ctx.strokeRect(b.x + 6, b.y + 6, b.w - 12, b.h - 12);
-      ctx.fillStyle = 'rgba(0,0,0,0.2)';
-      ctx.fillRect(b.x + b.w * 0.2, b.y + b.h * 0.25, 14, 10);
-      ctx.fillStyle = 'rgba(255,255,255,0.35)';
-      ctx.fillRect(b.x + b.w * 0.6, b.y + b.h * 0.55, 18, 12);
+      // Windows: a stable grid per building; at night some of them glow.
+      const cols = Math.max(1, Math.floor((b.w - 16) / 36));
+      const rows = Math.max(1, Math.floor((b.h - 16) / 36));
+      for (let cx = 0; cx < cols; cx += 1) {
+        for (let cy = 0; cy < rows; cy += 1) {
+          const wx = b.x + 14 + cx * 36;
+          const wy = b.y + 14 + cy * 36;
+          const lit = hash2(b.x + cx * 7 + (b.seed || 0) * 100, b.y + cy * 13) < 0.4;
+          ctx.fillStyle = lit && night > 0.05
+            ? `rgba(255, 217, 122, ${(0.35 + 0.65 * night).toFixed(3)})`
+            : 'rgba(0,0,0,0.14)';
+          ctx.fillRect(wx, wy, 11, 8);
+        }
+      }
+      // Mansion pools.
+      if (b.pool) {
+        ctx.fillStyle = '#3aa7c9';
+        ctx.fillRect(b.pool.x, b.pool.y, b.pool.w, b.pool.h);
+        ctx.strokeStyle = '#e8dcc8';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(b.pool.x, b.pool.y, b.pool.w, b.pool.h);
+      }
     }
   }
 
@@ -180,7 +314,8 @@ export function createRenderer(canvas) {
     ctx.save();
     ctx.translate(car.x, car.y);
     ctx.rotate(car.angle);
-    const len = car.kind === 'truck' ? 78 : 64;
+    const kind = CAR_KINDS[car.kind] || CAR_KINDS.sedan;
+    const len = kind.length;
     const wid = car.kind === 'truck' ? 34 : 30;
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     ctx.beginPath();
@@ -202,6 +337,24 @@ export function createRenderer(canvas) {
     ctx.beginPath();
     ctx.roundRect(-len / 2 + 8, -wid / 2 + 5, 10, wid - 10, 4);
     ctx.fill();
+    if (car.kind === 'muscle') {
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.fillRect(-len / 2 + 4, -3, len - 8, 6);
+    }
+    if (car.kind === 'limo') {
+      ctx.fillStyle = '#202a36';
+      ctx.fillRect(-6, -wid / 2 + 5, 12, wid - 10);
+    }
+    if (car.kind === 'armored') {
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillRect(-len / 2 + 4, -wid / 2 + 3, len - 8, 5);
+      ctx.fillRect(-len / 2 + 4, wid / 2 - 8, len - 8, 5);
+      ctx.fillStyle = '#ffd23a';
+      ctx.font = '700 9px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('VAULT', 0, 3);
+      ctx.textAlign = 'left';
+    }
     if (car.kind === 'taxi') {
       ctx.fillStyle = '#20242c';
       ctx.font = '700 11px system-ui, sans-serif';
@@ -272,15 +425,20 @@ export function createRenderer(canvas) {
     ctx.fill();
     ctx.fillStyle = '#20242c';
     ctx.fillRect(8, -2, 12, 4);
-    if (player.hasPistol) {
+    if (player.weapon === 'pistol') {
       ctx.fillStyle = '#14161a';
       ctx.fillRect(10, -1.5, 12, 3);
+    } else if (player.weapon === 'shotgun') {
+      ctx.fillStyle = '#14161a';
+      ctx.fillRect(10, -2, 20, 4);
+      ctx.fillStyle = '#5a451f';
+      ctx.fillRect(12, -2, 8, 4);
     }
     ctx.restore();
     if (player.muzzle > 0) {
       ctx.fillStyle = '#ffd23a';
       ctx.beginPath();
-      ctx.arc(player.x + Math.cos(player.angle) * 26, player.y + Math.sin(player.angle) * 26, 7, 0, Math.PI * 2);
+      ctx.arc(player.x + Math.cos(player.angle) * 26, player.y + Math.sin(player.angle) * 26, player.weapon === 'shotgun' ? 11 : 7, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -304,6 +462,23 @@ export function createRenderer(canvas) {
       ctx.arc(3, 0, 5, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
+      // Umbrellas come out in the rain.
+      if (ped.umbrella && state.rain > 0.4 && ped.state !== 'down') {
+        ctx.save();
+        ctx.translate(ped.x, ped.y - 2);
+        ctx.fillStyle = '#d94f3d';
+        ctx.beginPath();
+        ctx.arc(0, 0, 13, Math.PI, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#20242c';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, 10);
+        ctx.stroke();
+        ctx.restore();
+      }
     }
   }
 
@@ -313,7 +488,7 @@ export function createRenderer(canvas) {
       ctx.save();
       ctx.translate(rival.x, rival.y);
       ctx.rotate(rival.angle);
-      ctx.fillStyle = '#7a1f1f';
+      ctx.fillStyle = rival.kind === 'guard' ? '#2b3a55' : '#7a1f1f';
       ctx.beginPath();
       ctx.arc(0, 0, 13, 0, Math.PI * 2);
       ctx.fill();
@@ -324,10 +499,11 @@ export function createRenderer(canvas) {
       ctx.fillStyle = '#14161a';
       ctx.fillRect(10, -1.5, 12, 3);
       ctx.restore();
+      const maxHp = rival.maxHp || 50;
       ctx.fillStyle = '#20242c';
       ctx.fillRect(rival.x - 14, rival.y - 24, 28, 5);
       ctx.fillStyle = '#ff5a4e';
-      ctx.fillRect(rival.x - 14, rival.y - 24, 28 * Math.max(0, rival.hp / 50), 5);
+      ctx.fillRect(rival.x - 14, rival.y - 24, 28 * Math.max(0, rival.hp / maxHp), 5);
     }
   }
 
@@ -391,6 +567,27 @@ export function createRenderer(canvas) {
         ctx.fill();
         ctx.fillStyle = '#ffd23a';
         ctx.fillRect(-6, -3, 12, 6);
+      } else if (p.kind === 'shells') {
+        ctx.fillStyle = '#7a1f1f';
+        ctx.beginPath();
+        ctx.arc(0, 0, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffd23a';
+        ctx.fillRect(-7, -2, 5, 8);
+        ctx.fillRect(2, -2, 5, 8);
+      } else if (p.kind === 'stash') {
+        ctx.fillStyle = '#ffcf3d';
+        ctx.beginPath();
+        ctx.arc(0, 0, 11, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#8a6d1f';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = '#8a6d1f';
+        ctx.font = '700 12px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('★', 0, 4);
+        ctx.textAlign = 'left';
       } else {
         ctx.fillStyle = '#ffd23a';
         ctx.beginPath();
@@ -458,29 +655,31 @@ export function createRenderer(canvas) {
 
   function drawTitle(state, best) {
     drawWorld(state);
+    drawNightAndRain(state);
     withView(() => {
       ctx.fillStyle = 'rgba(10, 14, 22, 0.62)';
       ctx.fillRect(0, 0, VIEW.width, VIEW.height);
       ctx.textAlign = 'center';
       ctx.fillStyle = '#ffb03a';
       ctx.font = `800 64px ${FONT}`;
-      ctx.fillText('AZURE BAY', VIEW.width / 2, 210);
+      ctx.fillText('AZURE BAY', VIEW.width / 2, 200);
       ctx.fillStyle = PALETTE.text;
       ctx.font = `300 26px ${FONT}`;
-      ctx.fillText('an open-world crime story', VIEW.width / 2, 252);
+      ctx.fillText('an open-world crime story', VIEW.width / 2, 242);
       ctx.font = `15px ${FONT}`;
       ctx.fillStyle = PALETTE.muted;
-      ctx.fillText('A city to take, one job at a time.', VIEW.width / 2, 282);
+      ctx.fillText('A city to take, one job at a time — day, dusk, night and rain.', VIEW.width / 2, 272);
       ctx.fillStyle = '#ffd23a';
       ctx.font = `700 20px ${FONT}`;
-      ctx.fillText(state.hasSave ? 'ENTER — Continue' : 'ENTER — New game', VIEW.width / 2, 360);
+      ctx.fillText(state.hasSave ? 'ENTER — Continue' : 'ENTER — New game', VIEW.width / 2, 350);
       ctx.fillStyle = PALETTE.text;
       ctx.font = `15px ${FONT}`;
-      ctx.fillText('WASD drive & walk · Mouse aim · Click shoot · E steal a car · SPACE punch · P pause', VIEW.width / 2, 420);
-      ctx.fillText('Steal cars. Lose the cops. Run the five jobs for Mara Voss.', VIEW.width / 2, 448);
+      ctx.fillText('WASD drive & walk · Mouse aim · Click shoot · E steal a car · SPACE punch', VIEW.width / 2, 410);
+      ctx.fillText('R repair & tune at Rosa\u2019s Garage · Q switch weapon · P pause', VIEW.width / 2, 436);
+      ctx.fillText('Steal cars. Lose the cops. Run the eight jobs for Mara Voss.', VIEW.width / 2, 466);
       if (best > 0) {
         ctx.fillStyle = PALETTE.muted;
-        ctx.fillText(`Best haul: $${best.toLocaleString('en-US')}`, VIEW.width / 2, 486);
+        ctx.fillText(`Best haul: $${best.toLocaleString('en-US')}`, VIEW.width / 2, 504);
       }
       ctx.textAlign = 'left';
     });
@@ -488,6 +687,7 @@ export function createRenderer(canvas) {
 
   function drawPaused() {
     drawWorld(stateRef);
+    drawNightAndRain(stateRef);
     withView(() => {
       ctx.fillStyle = 'rgba(10, 14, 22, 0.6)';
       ctx.fillRect(0, 0, VIEW.width, VIEW.height);
@@ -504,6 +704,7 @@ export function createRenderer(canvas) {
 
   function drawOver(state, title, subtitle) {
     drawWorld(state);
+    drawNightAndRain(state);
     withView(() => {
       ctx.fillStyle = 'rgba(10, 14, 22, 0.72)';
       ctx.fillRect(0, 0, VIEW.width, VIEW.height);
@@ -523,20 +724,24 @@ export function createRenderer(canvas) {
 
   function drawComplete(state) {
     drawWorld(state);
+    drawNightAndRain(state);
     withView(() => {
       ctx.fillStyle = 'rgba(10, 14, 22, 0.66)';
       ctx.fillRect(0, 0, VIEW.width, VIEW.height);
       ctx.textAlign = 'center';
       ctx.fillStyle = '#ffd23a';
       ctx.font = `800 52px ${FONT}`;
-      ctx.fillText('THE AZURE SCORE', VIEW.width / 2, 280);
+      ctx.fillText('THE AZURE HEIST', VIEW.width / 2, 260);
       ctx.fillStyle = PALETTE.text;
       ctx.font = `18px ${FONT}`;
-      ctx.fillText('Leo pulled it off. Five jobs, one city, his name on every corner.', VIEW.width / 2, 322);
-      ctx.fillText(`Total haul: $${Math.floor(state.player.cash).toLocaleString('en-US')}`, VIEW.width / 2, 352);
+      ctx.fillText('Leo pulled it off. Eight jobs, one city, his name on every corner.', VIEW.width / 2, 302);
+      ctx.fillText(`Total haul: $${Math.floor(state.player.cash).toLocaleString('en-US')}`, VIEW.width / 2, 332);
+      ctx.fillStyle = PALETTE.muted;
+      ctx.font = `15px ${FONT}`;
+      ctx.fillText(`Cars stolen ${state.stats.carsStolen} · Stashes ${state.stats.stashesFound}/12 · Shots fired ${state.stats.shotsFired}`, VIEW.width / 2, 364);
       ctx.fillStyle = '#ffd23a';
       ctx.font = `700 20px ${FONT}`;
-      ctx.fillText('ENTER — keep roaming Azure Bay', VIEW.width / 2, 410);
+      ctx.fillText('ENTER — keep roaming Azure Bay', VIEW.width / 2, 420);
       ctx.textAlign = 'left';
     });
   }
@@ -562,6 +767,7 @@ export function createRenderer(canvas) {
       return;
     }
     drawWorld(state);
+    drawNightAndRain(state);
     withView(() => {
       drawHud(ctx, state, screen);
     });

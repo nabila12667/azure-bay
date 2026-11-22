@@ -1,7 +1,8 @@
 // The Azure Bay Police Department: the wanted level, the cruisers and foot
 // cops it sends after Leo, the chase, and the bust. Stars rise with crime
-// and fall when Leo stays out of sight; at five stars the roads ahead are
-// blocked. A bust costs cash and a trip to Police HQ.
+// and fall when Leo stays out of sight; at four stars the roads ahead are
+// blocked, at five the whole department is on him. A bust costs cash and
+// a trip to Police HQ.
 
 import { COP, WANTED } from './config.js';
 import { createCar, driveCar, KIND_POLICE, nearestIntersection } from './vehicles.js';
@@ -148,8 +149,8 @@ export function updatePolice(police, dt, player, city) {
     police.bustTimer = 0;
   }
 
-  // At five stars, block the road ahead of Leo with parked cruisers.
-  if (police.wanted >= 5) {
+  // At four stars and above, block the road ahead of Leo with parked cruisers.
+  if (police.wanted >= 4) {
     police.roadblockTimer -= dt;
     if (police.roadblockTimer <= 0) {
       police.roadblockTimer = 14;
