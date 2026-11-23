@@ -23,7 +23,7 @@ export function createPedestrian(x, y, random) {
     skin: SKINS[Math.floor(random() * SKINS.length)],
     umbrella: random() < 0.25,
     r: PED.radius,
-    state: 'walk', // walk | flee | down
+    state: 'walk', // walk | flee | down | wait
     downTimer: 0,
     fleeTimer: 0,
     fleeX: 0,
@@ -35,7 +35,7 @@ export function createPedestrian(x, y, random) {
 /** Frighten every pedestrian near (x, y): they run away from it. */
 export function frighten(peds, x, y, radius) {
   for (const ped of peds) {
-    if (ped.state === 'down') continue;
+    if (ped.state === 'down' || ped.fare) continue;
     const d = Math.hypot(ped.x - x, ped.y - y);
     if (d < radius) {
       ped.state = 'flee';
@@ -55,6 +55,8 @@ export function updatePedestrians(peds, dt, random, city) {
       if (ped.downTimer <= 0) ped.state = 'walk';
       continue;
     }
+    // A waiting fare customer stands at the kerb until picked up.
+    if (ped.state === 'wait') continue;
     if (ped.state === 'flee') {
       ped.fleeTimer -= dt;
       const dx = ped.fleeX - ped.x;
@@ -95,7 +97,7 @@ export function updatePedestrians(peds, dt, random, city) {
 export function hitByCar(peds, car) {
   if (Math.abs(car.speed) < 60) return null;
   for (const ped of peds) {
-    if (ped.state === 'down') continue;
+    if (ped.state === 'down' || ped.fare) continue;
     const d = Math.hypot(ped.x - car.x, ped.y - car.y);
     if (d < 34) {
       ped.state = 'down';

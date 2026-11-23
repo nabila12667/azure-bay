@@ -4,10 +4,11 @@
 // (roads on a grid, landmarks at named corners); only the buildings' sizes
 // and colours come from the seeded random, so the city is the same every run.
 //
-// The city has four districts — Old Town in the west, Downtown in the
-// middle, the Harbor in the east, and the Marina on the southern beach —
-// plus a park, a plaza with a fountain, and two mansions with pools in the
-// North Hills.
+// The city has five districts — Old Town in the west, Downtown in the
+// middle, the Harbor in the east, the Marina on the southern beach, and
+// the Airfield in the north-west corner — plus a park, a plaza with a
+// fountain, the Meridian Casino south of the plaza, and two mansions with
+// pools in the North Hills.
 
 import { WORLD } from './config.js';
 
@@ -24,6 +25,7 @@ const WALL_COLOURS = ['#e8dcc8', '#f2e6d0', '#dfe8dd', '#ead9c2', '#e3d3e0'];
 export function districtOf(x, y) {
   if (y >= 2400) return 'Beach';
   if (x >= 3200 && y >= 2000) return 'Marina';
+  if (x < 960 && y < 800) return 'Airfield';
   if (x < 1280) return 'Old Town';
   if (x < 2560) return 'Downtown';
   return 'Harbor';
@@ -49,6 +51,16 @@ export function createCity(random) {
   const plaza = { x: 2290, y: 1330, w: 540, h: 380 };
   const fountain = { x: 2560, y: 1520, r: 42 };
   const beachY = 2400;
+  // Azure Field, the airfield in the north-west corner (the 320-960 x
+  // 320-800 block): tarmac, a runway, a hangar and a parked plane.
+  const airfield = {
+    x: 389, y: 389, w: 502, h: 356,
+    runway: { x: 400, y: 555, w: 480, h: 90 },
+    windsock: { x: 850, y: 430 },
+  };
+  // The Meridian Casino, the block south of the plaza (2240-2880 x
+  // 1760-2240): one big purple building with a neon sign, no small blocks.
+  const casino = { x: 2400, y: 1900, w: 320, h: 180 };
 
   for (let gx = 0; gx < ROADS_X.length - 1; gx += 1) {
     for (let gy = 0; gy < ROADS_Y.length - 1; gy += 1) {
@@ -59,6 +71,8 @@ export function createCity(random) {
       const block = { x: bx0, y: by0, w: bx1 - bx0, h: by1 - by0 };
       const inPark = block.x < park.x + park.w && block.x + block.w > park.x && block.y < park.y + park.h && block.y + block.h > park.y;
       const inPlaza = block.x < plaza.x + plaza.w && block.x + block.w > plaza.x && block.y < plaza.y + plaza.h && block.y + block.h > plaza.y;
+      const inAirfield = block.x < airfield.x + airfield.w && block.x + block.w > airfield.x && block.y < airfield.y + airfield.h && block.y + block.h > airfield.y;
+      const inCasino = block.x < casino.x + casino.w && block.x + block.w > casino.x && block.y < casino.y + casino.h && block.y + block.h > casino.y;
       if (inPark) {
         for (let i = 0; i < 26; i += 1) {
           trees.push({ x: block.x + 20 + random() * (block.w - 40), y: block.y + 20 + random() * (block.h - 40), r: 12 + random() * 10 });
@@ -66,6 +80,7 @@ export function createCity(random) {
         continue;
       }
       if (inPlaza) continue;
+      if (inAirfield || inCasino) continue;
       // One to four buildings per block, with a margin between them.
       const cols = random() < 0.5 ? 2 : 1;
       const rows = random() < 0.5 ? 2 : 1;
@@ -90,6 +105,15 @@ export function createCity(random) {
       }
     }
   }
+
+  // Azure Field's hangar and parked plane, and the Meridian Casino: fixed
+  // buildings with flags the renderer draws specially. They collide like
+  // any building, so Leo walks around them, never through them.
+  buildings.push(
+    { x: 430, y: 400, w: 180, h: 90, wall: '#6b7280', roof: '#4b5563', district: 'Airfield', floors: 1, seed: 0.42, hangar: true },
+    { x: 600, y: 570, w: 200, h: 60, wall: '#e8e4da', roof: '#3d7dd9', district: 'Airfield', floors: 1, seed: 0.17, plane: true },
+    { x: casino.x, y: casino.y, w: casino.w, h: casino.h, wall: '#3b2d5e', roof: '#241a3d', district: 'Downtown', floors: 2, seed: 0.63, casino: true },
+  );
 
   // Two mansions with pools in the North Hills (the north-east blocks).
   const mansions = [
@@ -119,7 +143,7 @@ export function createCity(random) {
     boats.push({ x: dx - 40, y: 2520, angle: -Math.PI / 2 + (random() - 0.5) * 0.2, hull: '#7fbf5a' });
   }
 
-  return { buildings, trees, park, plaza, fountain, beachY, docks, boats };
+  return { buildings, trees, park, plaza, fountain, beachY, docks, boats, airfield, casino };
 }
 
 /** True when the circle at (x, y) with radius r touches a building. */

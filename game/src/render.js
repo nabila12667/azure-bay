@@ -8,7 +8,9 @@
 // Light and weather are painted here too: as the day slides into night the
 // city darkens, windows light up, streetlights glow and headlights cut
 // through the dark; when the rain comes, streaks cross the screen and the
-// umbrellas come out.
+// umbrellas come out. The airfield, the casino and the police helicopter
+// are painted here as well — the helicopter with a searchlight that
+// follows Leo while the heat is at five stars.
 
 import { FONT, PALETTE, VIEW, WORLD, CAR_KINDS } from './config.js';
 import { ROADS_X, ROADS_Y, ROAD_WIDTH } from './city.js';
@@ -82,6 +84,70 @@ export function createRenderer(canvas) {
     drawBullets(state);
     drawParticles(state);
     drawMarker(state);
+    drawHelicopter(state);
+    ctx.restore();
+  }
+
+  /** The police helicopter: a shadow on the ground, a body above it, a
+   * spinning rotor, and a searchlight cone that follows Leo. */
+  function drawHelicopter(state) {
+    const heli = state.police.heli;
+    if (!heli) return;
+    const night = nightFactor(state.dayTime);
+    const player = state.player;
+    const hx = heli.x;
+    const hy = heli.y - 52;
+    ctx.save();
+    // Searchlight: a cone from the helicopter to Leo, and a bright pool
+    // of light on the ground where he stands.
+    const dx = player.x - hx;
+    const dy = player.y - hy;
+    const d = Math.hypot(dx, dy) || 1;
+    const nx = -dy / d;
+    const ny = dx / d;
+    ctx.fillStyle = `rgba(255, 240, 180, ${(0.08 + 0.10 * night).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.moveTo(hx, hy);
+    ctx.lineTo(player.x + nx * 90, player.y + ny * 90);
+    ctx.lineTo(player.x - nx * 90, player.y - ny * 90);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = `rgba(255, 240, 180, ${(0.12 + 0.10 * night).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, 95, 0, Math.PI * 2);
+    ctx.fill();
+    // Shadow on the ground, then the body above it.
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+    ctx.beginPath();
+    ctx.ellipse(heli.x, heli.y, 26, 14, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.translate(hx, hy);
+    ctx.fillStyle = '#1f3a6e';
+    ctx.fillRect(-52, -3, 28, 6);
+    ctx.fillStyle = '#ff3b30';
+    ctx.fillRect(-54, -6, 6, 12);
+    ctx.fillStyle = '#1f3a6e';
+    ctx.beginPath();
+    ctx.roundRect(-26, -10, 52, 20, 9);
+    ctx.fill();
+    ctx.fillStyle = '#3a6fd8';
+    ctx.fillRect(-26, -4, 12, 8);
+    ctx.fillStyle = '#e8e4da';
+    ctx.beginPath();
+    ctx.roundRect(6, -6, 12, 12, 5);
+    ctx.fill();
+    const rotor = state.time * 18;
+    ctx.strokeStyle = 'rgba(20, 22, 26, 0.85)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-Math.cos(rotor) * 34, -Math.sin(rotor) * 34);
+    ctx.lineTo(Math.cos(rotor) * 34, Math.sin(rotor) * 34);
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '700 9px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('ABPD', 0, 3);
+    ctx.textAlign = 'left';
     ctx.restore();
   }
 
@@ -171,6 +237,15 @@ export function createRenderer(canvas) {
       ctx.arc(x + 60 + Math.sin(state.time * 1.2 + x) * 20, 2520, 26, 0, Math.PI);
       ctx.fill();
     }
+    // Sunlight shimmering on the water: short pale streaks that drift
+    // with the time, so the bay never sits still.
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+    for (let x = Math.floor((v.x - 20) / 180) * 180; x < v.x + v.w + 20; x += 180) {
+      const driftA = (state.time * 24 + x) % 180;
+      const driftB = (state.time * 14 + x * 2) % 180;
+      ctx.fillRect(x + driftA - 90, 2512, 56, 3);
+      ctx.fillRect(x + driftB - 90, 2532, 40, 3);
+    }
     // Marina docks and moored boats.
     for (const dock of city.docks) {
       ctx.fillStyle = '#8a6d3b';
@@ -224,6 +299,39 @@ export function createRenderer(canvas) {
       ctx.arc(f.x + Math.cos(a) * 16, f.y + Math.sin(a) * 16, 3, 0, Math.PI * 2);
       ctx.fill();
     }
+    // Azure Field: grey tarmac over the whole north-west block, a runway
+    // with dashes and threshold bars, and a windsock by the hangar.
+    const af = city.airfield;
+    ctx.fillStyle = '#8a8f98';
+    ctx.fillRect(af.x, af.y, af.w, af.h);
+    ctx.fillStyle = '#3d4450';
+    ctx.fillRect(af.runway.x, af.runway.y, af.runway.w, af.runway.h);
+    ctx.fillStyle = '#e8e4d2';
+    for (let x = af.runway.x + 24; x < af.runway.x + af.runway.w - 20; x += 64) {
+      ctx.fillRect(x, af.runway.y + af.runway.h / 2 - 3, 30, 6);
+    }
+    for (let i = 0; i < 4; i += 1) {
+      ctx.fillRect(af.runway.x + 8, af.runway.y + 10 + i * 20, 10, 12);
+      ctx.fillRect(af.runway.x + af.runway.w - 18, af.runway.y + 10 + i * 20, 10, 12);
+    }
+    const ws = af.windsock;
+    ctx.strokeStyle = '#20242c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(ws.x, ws.y);
+    ctx.lineTo(ws.x, ws.y - 34);
+    ctx.stroke();
+    ctx.fillStyle = '#e07856';
+    ctx.save();
+    ctx.translate(ws.x, ws.y - 34);
+    ctx.rotate(Math.sin(state.time * 1.6) * 0.25 + 0.35);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(26, -5);
+    ctx.lineTo(26, 5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
     // Trees.
     for (const tree of city.trees) {
       if (tree.x < v.x - 40 || tree.x > v.x + v.w + 40 || tree.y < v.y - 40 || tree.y > v.y + v.h + 40) continue;
@@ -276,6 +384,87 @@ export function createRenderer(canvas) {
     const night = nightFactor(state.dayTime);
     for (const b of state.city.buildings) {
       if (b.x > v.x + v.w + 40 || b.x + b.w < v.x - 40 || b.y > v.y + v.h + 40 || b.y + b.h < v.y - 40) continue;
+      if (b.hangar) {
+        // The Azure Field hangar: dark steel walls and a big ribbed door.
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        ctx.fillRect(b.x + 6, b.y + 8, b.w, b.h);
+        ctx.fillStyle = '#6b7280';
+        ctx.fillRect(b.x, b.y, b.w, b.h);
+        ctx.fillStyle = '#4b5563';
+        ctx.fillRect(b.x + 14, b.y + 12, b.w - 28, b.h - 24);
+        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+        ctx.lineWidth = 2;
+        for (let x = b.x + 34; x < b.x + b.w - 14; x += 24) {
+          ctx.beginPath();
+          ctx.moveTo(x, b.y + 12);
+          ctx.lineTo(x, b.y + b.h - 12);
+          ctx.stroke();
+        }
+        ctx.fillStyle = '#ffd23a';
+        ctx.font = '700 13px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('AZURE FIELD', b.x + b.w / 2, b.y - 8);
+        ctx.textAlign = 'left';
+        continue;
+      }
+      if (b.plane) {
+        // The parked plane on the runway: white fuselage, blue stripe,
+        // wings and tail, all inside its own footprint.
+        ctx.save();
+        ctx.translate(b.x + b.w / 2, b.y + b.h / 2);
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.beginPath();
+        ctx.ellipse(3, 5, b.w / 2, b.h / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#d9d4c8';
+        ctx.fillRect(-30, -b.h / 2 + 2, 40, b.h - 4);
+        ctx.fillRect(-30, -b.h / 2 + 2, 40, 8);
+        ctx.fillRect(-30, b.h / 2 - 10, 40, 8);
+        ctx.fillStyle = '#e8e4da';
+        ctx.beginPath();
+        ctx.roundRect(-b.w / 2, -b.h / 2 + 8, b.w, b.h - 16, 14);
+        ctx.fill();
+        ctx.fillStyle = '#3d7dd9';
+        ctx.fillRect(-b.w / 2 + 10, -2, b.w - 20, 5);
+        ctx.fillStyle = '#202a36';
+        ctx.beginPath();
+        ctx.roundRect(b.w / 2 - 24, -b.h / 2 + 14, 12, b.h - 28, 4);
+        ctx.fill();
+        ctx.fillStyle = '#d9d4c8';
+        ctx.fillRect(-b.w / 2 + 2, -b.h / 2 + 2, 10, 12);
+        ctx.fillRect(-b.w / 2 + 2, b.h / 2 - 14, 10, 12);
+        ctx.restore();
+        continue;
+      }
+      if (b.casino) {
+        // The Meridian Casino: deep purple walls, gold trim, and a neon
+        // sign that glows harder after dark.
+        const glow = 0.55 + 0.45 * night;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fillRect(b.x + 8, b.y + 10, b.w, b.h);
+        ctx.fillStyle = '#3b2d5e';
+        ctx.fillRect(b.x, b.y, b.w, b.h);
+        ctx.strokeStyle = '#c9a227';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(b.x + 4, b.y + 4, b.w - 8, b.h - 8);
+        ctx.fillStyle = '#241a3d';
+        ctx.fillRect(b.x + 16, b.y + 16, b.w - 32, b.h - 32);
+        ctx.fillStyle = `rgba(255, 210, 58, ${glow.toFixed(2)})`;
+        ctx.font = '800 30px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('MERIDIAN', b.x + b.w / 2, b.y + b.h / 2 - 6);
+        ctx.font = '700 13px system-ui, sans-serif';
+        ctx.fillStyle = `rgba(255, 255, 255, ${(0.25 + 0.75 * glow).toFixed(2)})`;
+        ctx.fillText('C A S I N O', b.x + b.w / 2, b.y + b.h / 2 + 22);
+        ctx.textAlign = 'left';
+        for (let x = b.x + 20; x < b.x + b.w - 10; x += 24) {
+          ctx.fillStyle = `rgba(255, 210, 58, ${glow.toFixed(2)})`;
+          ctx.beginPath();
+          ctx.arc(x, b.y + b.h - 12, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        continue;
+      }
       ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
       ctx.fillRect(b.x + 6, b.y + 8, b.w, b.h);
       ctx.fillStyle = b.wall;
@@ -479,6 +668,14 @@ export function createRenderer(canvas) {
         ctx.stroke();
         ctx.restore();
       }
+      // A waiting fare customer gets a gold ring, so the cab knows them.
+      if (ped.fare) {
+        ctx.strokeStyle = '#ffd23a';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(ped.x, ped.y, 17, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
   }
 
@@ -676,7 +873,7 @@ export function createRenderer(canvas) {
       ctx.font = `15px ${FONT}`;
       ctx.fillText('WASD drive & walk · Mouse aim · Click shoot · E steal a car · SPACE punch', VIEW.width / 2, 410);
       ctx.fillText('R repair & tune at Rosa\u2019s Garage · Q switch weapon · P pause', VIEW.width / 2, 436);
-      ctx.fillText('Steal cars. Lose the cops. Run the eight jobs for Mara Voss.', VIEW.width / 2, 466);
+      ctx.fillText('Steal cars. Lose the cops. Run the twelve jobs for Mara Voss.', VIEW.width / 2, 466);
       if (best > 0) {
         ctx.fillStyle = PALETTE.muted;
         ctx.fillText(`Best haul: $${best.toLocaleString('en-US')}`, VIEW.width / 2, 504);
@@ -731,10 +928,10 @@ export function createRenderer(canvas) {
       ctx.textAlign = 'center';
       ctx.fillStyle = '#ffd23a';
       ctx.font = `800 52px ${FONT}`;
-      ctx.fillText('THE AZURE HEIST', VIEW.width / 2, 260);
+      ctx.fillText('THE MERIDIAN JOB', VIEW.width / 2, 260);
       ctx.fillStyle = PALETTE.text;
       ctx.font = `18px ${FONT}`;
-      ctx.fillText('Leo pulled it off. Eight jobs, one city, his name on every corner.', VIEW.width / 2, 302);
+      ctx.fillText('Leo pulled it off. Twelve jobs, one city, his name on every corner.', VIEW.width / 2, 302);
       ctx.fillText(`Total haul: $${Math.floor(state.player.cash).toLocaleString('en-US')}`, VIEW.width / 2, 332);
       ctx.fillStyle = PALETTE.muted;
       ctx.font = `15px ${FONT}`;

@@ -1,8 +1,9 @@
 // The Azure Bay Police Department: the wanted level, the cruisers and foot
 // cops it sends after Leo, the chase, and the bust. Stars rise with crime
 // and fall when Leo stays out of sight; at four stars the roads ahead are
-// blocked, at five the whole department is on him. A bust costs cash and
-// a trip to Police HQ.
+// blocked, at five the whole department is on him — cruisers, roadblocks
+// and a helicopter with a searchlight that holds the heat until Leo shakes
+// it. A bust costs cash and a trip to Police HQ.
 
 import { COP, WANTED } from './config.js';
 import { createCar, driveCar, KIND_POLICE, nearestIntersection } from './vehicles.js';
@@ -17,6 +18,11 @@ export function createPolice(random) {
     roadblockAt: null,
     cars: [],
     cops: [],
+    // The police helicopter: at five stars it orbits Leo, its searchlight
+    // on him, and the heat does not decay while it is up.
+    heli: null,
+    heliOrbit: 0,
+    heliAnnounced: false,
     random,
   };
 }
@@ -72,11 +78,28 @@ export function updatePolice(police, dt, player, city) {
   while (police.cars.length < wantedCarCount(police.wanted)) spawnPoliceCar(police, player);
   while (police.cops.length < wantedCopCount(police.wanted, !!player.inCar)) spawnFootCop(police, player);
 
-  // Wanted decays when no police can see Leo.
+  // The helicopter: five stars brings it in, it orbits Leo with the
+  // searchlight on him, and it leaves when the heat drops below five.
+  if (police.wanted >= 5 && !police.heli) {
+    police.heli = { x: player.x + 400, y: player.y - 300 };
+    police.heliOrbit = Math.atan2(police.heli.y - player.y, police.heli.x - player.x);
+    police.heliAnnounced = false;
+  } else if (police.wanted < 5 && police.heli) {
+    police.heli = null;
+  }
+  if (police.heli) {
+    police.heliOrbit += dt * 0.45;
+    police.heli.x = player.x + Math.cos(police.heliOrbit) * 260;
+    police.heli.y = player.y + Math.sin(police.heliOrbit) * 260;
+  }
+  const heliOn = !!police.heli;
+
+  // Wanted decays when no police can see Leo — and never while the
+  // helicopter is overhead with its searchlight on him.
   let nearest = Infinity;
   for (const car of police.cars) nearest = Math.min(nearest, Math.hypot(car.x - player.x, car.y - player.y));
   for (const cop of police.cops) nearest = Math.min(nearest, Math.hypot(cop.x - player.x, cop.y - player.y));
-  if (police.wanted > 0 && nearest > WANTED.decayDistance) {
+  if (police.wanted > 0 && nearest > WANTED.decayDistance && !heliOn) {
     police.decayTimer += dt;
     if (police.decayTimer >= WANTED.decaySeconds) {
       police.wanted -= 1;
@@ -175,6 +198,7 @@ export function updatePolice(police, dt, player, city) {
   if (police.wanted === 0) {
     police.cars.length = 0;
     police.cops.length = 0;
+    police.heli = null;
   }
   return events;
 }
@@ -185,4 +209,6 @@ export function clearPolice(police) {
   police.bustTimer = 0;
   police.cars.length = 0;
   police.cops.length = 0;
+  police.heli = null;
+  police.heliAnnounced = false;
 }

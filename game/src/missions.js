@@ -1,18 +1,22 @@
-// The story of Azure Bay: eight jobs for Leo Marlow, from Mara Voss, each
-// one a small state machine of steps — steal a car, fetch a crate, lose the
-// heat, clear a warehouse, run five drops, then a night courier run that
-// earns the shotgun, an illegal street race, and the finale: the Azure
-// Bank heist, six guards and the whole ABPD on Leo's tail. A step is one
-// verb: enter a car, reach a place, pick something up, lose the wanted
-// level, clear the rivals, hit the checkpoints in order. The mission hands
-// the HUD its objective text and its marker, and pays out when the last
-// step lands.
+// The story of Azure Bay: twelve jobs for Leo Marlow, from Mara Voss and
+// Rosa, each one a small state machine of steps — steal a car, fetch a
+// crate, lose the heat, clear a warehouse, run five drops, then a night
+// courier run that earns the shotgun, an illegal street race, and the
+// finale at the Azure Bank. Round 5 adds four more: a cab shift for Rosa,
+// a hot cargo pickup at the airfield, a midnight rally through eight
+// gates, and the second heist — the Meridian Job at the casino, five
+// guards, a vault and a helicopter overhead. A step is one verb: enter a
+// car, reach a place, pick something up, lose the wanted level, clear the
+// rivals, hit the checkpoints in order, or run a chain of taxi fares. The
+// mission hands the HUD its objective text and its marker, and pays out
+// when the last step lands.
 
 import { PLACES } from './config.js';
 import { createRival, aliveRivals } from './rivals.js';
 import { setWanted } from './police.js';
+import { createPedestrian } from './pedestrians.js';
 
-export const MISSION_COUNT = 8;
+export const MISSION_COUNT = 12;
 
 const CHECKPOINTS = [
   { x: 960, y: 800, name: 'Old Town' },
@@ -35,6 +39,32 @@ const RACE_GATES = [
   { x: 2880, y: 2240, name: 'Gate 4' },
   { x: 960, y: 2240, name: 'Gate 5' },
   { x: 320, y: 1280, name: 'Gate 6' },
+];
+
+// The midnight rally: eight gates, a full lap of the city at night.
+const RALLY_GATES = [
+  { x: 960, y: 320, name: 'Gate 1' },
+  { x: 1600, y: 800, name: 'Gate 2' },
+  { x: 2880, y: 320, name: 'Gate 3' },
+  { x: 3520, y: 1280, name: 'Gate 4' },
+  { x: 3520, y: 2240, name: 'Gate 5' },
+  { x: 2240, y: 2240, name: 'Gate 6' },
+  { x: 960, y: 2240, name: 'Gate 7' },
+  { x: 320, y: 1280, name: 'Gate 8' },
+];
+
+// Rosa's cab shift: three fares, each a pickup on the road and a drop
+// across town, all in a car. Every drop pays $150 on the spot.
+const CAB_FARES = [
+  { px: 2240, py: 1820, dx: 1600, dy: 2200, from: 'Club Lumen', to: 'St. Aurelia Hospital' },
+  { px: 2880, py: 1500, dx: 3520, dy: 1280, from: 'Downtown Plaza', to: 'Pier 4' },
+  { px: 2240, py: 380, dx: 3360, dy: 2240, from: 'Police HQ', to: 'Marina' },
+];
+
+// The five guards holding the Meridian Casino floor.
+const CASINO_GUARDS = [
+  { x: 2420, y: 2140 }, { x: 2560, y: 2140 }, { x: 2700, y: 2140 },
+  { x: 2360, y: 2000 }, { x: 2760, y: 2000 },
 ];
 
 export const MISSIONS = [
@@ -132,6 +162,54 @@ export const MISSIONS = [
       { type: 'goto', x: PLACES.lighthouse.x, y: PLACES.lighthouse.y, radius: 110, text: 'Escape to the lighthouse' },
     ],
   },
+  {
+    id: 'cab-for-hire',
+    title: 'Cab for Hire',
+    giver: 'Rosa',
+    brief: 'My taxi is sitting idle and the fares are out there, Leo. Three pickups across town, $150 a drop — drive like the meter is running, because it is. 150 seconds.',
+    reward: 250,
+    timer: 150,
+    steps: [
+      { type: 'fare', fares: CAB_FARES, farePay: 150, text: 'Run the three cab fares' },
+    ],
+  },
+  {
+    id: 'airfield-cargo',
+    title: 'Airfield Cargo',
+    giver: 'Mara Voss',
+    brief: 'A crate landed at Azure Field and the ABPD knows it is ours. Grab it at the hangar — the heat comes with it — and get it to the Dock Warehouse. 150 seconds.',
+    reward: 1100,
+    timer: 150,
+    steps: [
+      { type: 'pickup', x: PLACES.airfield.x, y: PLACES.airfield.y, radius: 70, heat: 2, text: 'Pick up the crate at the airfield hangar' },
+      { type: 'goto', x: PLACES.warehouse.x, y: PLACES.warehouse.y, radius: 90, text: 'Deliver the crate to the Dock Warehouse' },
+    ],
+  },
+  {
+    id: 'midnight-rally',
+    title: 'Midnight Rally',
+    giver: 'Rosa',
+    brief: 'The real race, Leo — eight gates, a full lap of Azure Bay after dark, and the whole city watching. 110 seconds, no excuses.',
+    reward: 1800,
+    timer: 110,
+    steps: [
+      { type: 'enter-car', text: 'Get in a car for the rally' },
+      { type: 'checkpoints', points: RALLY_GATES, radius: 100, inCar: true, text: 'Hit the eight rally gates in order' },
+    ],
+  },
+  {
+    id: 'meridian-job',
+    title: 'The Meridian Job',
+    giver: 'Mara Voss',
+    brief: 'One last score, Leo. The Meridian Casino vault, five guards on the floor, and the ABPD helicopter already in the air. Take the vault and vanish at the safehouse.',
+    reward: 3000,
+    onStart: 'meridian',
+    steps: [
+      { type: 'eliminate', count: 5, x: PLACES.casino.x, y: PLACES.casino.y, kind: 'guard', spots: CASINO_GUARDS, text: 'Take down the five casino guards' },
+      { type: 'pickup', x: PLACES.casino.x, y: PLACES.casino.y, radius: 80, text: 'Grab the loot from the vault' },
+      { type: 'goto', x: PLACES.safehouse.x, y: PLACES.safehouse.y, radius: 100, text: 'Escape to the safehouse' },
+    ],
+  },
 ];
 
 export function createMissions() {
@@ -145,11 +223,39 @@ export function createMissions() {
     storyComplete: false,
     banner: '',
     bannerTimer: 0,
+    // Cab for Hire: which fare is next, which leg, and the waiting
+    // customer. fareEvent is read and cleared by the world after each
+    // step, so the messages land with the fare, not a frame later.
+    fare: 0,
+    fareLeg: 'pickup', // pickup | drop
+    farePed: null,
+    fareEvent: null,
+    fareEventText: '',
   };
 }
 
 export function currentMission(missions) {
   return missions.index < MISSIONS.length ? MISSIONS[missions.index] : null;
+}
+
+/** Put a waiting fare customer beside the road at a pickup spot. */
+function spawnFarePed(missions, world, fare) {
+  const ped = createPedestrian(fare.px + 45, fare.py + 10, world.random);
+  ped.state = 'wait';
+  ped.fare = true;
+  world.peds.push(ped);
+  missions.farePed = ped;
+}
+
+function removeFarePed(missions, world) {
+  if (!missions.farePed) return;
+  const i = world.peds.indexOf(missions.farePed);
+  if (i >= 0) world.peds.splice(i, 1);
+  missions.farePed = null;
+}
+
+function clearFarePeds(world) {
+  world.peds = world.peds.filter((p) => !p.fare);
 }
 
 export function startMission(missions, world) {
@@ -160,12 +266,15 @@ export function startMission(missions, world) {
   missions.timer = mission.timer || 0;
   missions.hasCrate = false;
   missions.checkpoint = 0;
+  missions.fare = 0;
+  missions.fareLeg = 'pickup';
+  missions.fareEvent = null;
   if (mission.onStart === 'heat') {
     setWanted(world.police, 3);
   }
-  if (mission.onStart === 'rivals' || mission.onStart === 'heist') {
+  if (mission.onStart === 'rivals' || mission.onStart === 'heist' || mission.onStart === 'meridian') {
     const step = mission.steps.find((s) => s.type === 'eliminate');
-    const spots = step && step.kind === 'guard'
+    const spots = (step && step.spots) || (step && step.kind === 'guard'
       ? [
           { x: 2180, y: 1440 }, { x: 2300, y: 1440 }, { x: 2240, y: 1560 },
           { x: 2180, y: 1580 }, { x: 2320, y: 1560 }, { x: 2240, y: 1420 },
@@ -173,10 +282,15 @@ export function startMission(missions, world) {
       : [
           { x: 2860, y: 820 }, { x: 2980, y: 820 }, { x: 2920, y: 900 },
           { x: 2840, y: 920 }, { x: 3000, y: 900 },
-        ];
+        ]);
     const kind = step && step.kind === 'guard' ? 'guard' : undefined;
     for (const spot of spots) world.rivals.push(createRival(spot.x, spot.y, kind));
     if (mission.onStart === 'heist') setWanted(world.police, 3);
+    if (mission.onStart === 'meridian') setWanted(world.police, 2);
+  }
+  if (mission.steps[0] && mission.steps[0].type === 'fare') {
+    clearFarePeds(world);
+    spawnFarePed(missions, world, mission.steps[0].fares[0]);
   }
   showBanner(missions, `${mission.title} — ${mission.giver}`, mission.brief);
 }
@@ -197,6 +311,14 @@ function stepText(missions) {
   }
   if (step.type === 'eliminate') {
     return `${step.text} (${aliveRivalsCount(missions)} left)`;
+  }
+  if (step.type === 'fare') {
+    const fare = step.fares[missions.fare];
+    if (!fare) return step.text;
+    const n = `${missions.fare + 1}/${step.fares.length}`;
+    return missions.fareLeg === 'pickup'
+      ? `Pick up the fare at ${fare.from} (${n}) — in a car`
+      : `Drop the fare at ${fare.to} (${n})`;
   }
   return step.text;
 }
@@ -221,6 +343,11 @@ export function missionMarker(missions) {
   if (step.type === 'goto' || step.type === 'pickup') return { x: step.x, y: step.y };
   if (step.type === 'checkpoints') return step.points[missions.checkpoint] || null;
   if (step.type === 'eliminate') return { x: step.x || PLACES.warehouse.x, y: step.y || PLACES.warehouse.y };
+  if (step.type === 'fare') {
+    const fare = step.fares[missions.fare];
+    if (!fare) return null;
+    return missions.fareLeg === 'pickup' ? { x: fare.px, y: fare.py } : { x: fare.dx, y: fare.dy };
+  }
   return null;
 }
 
@@ -260,6 +387,42 @@ export function updateMissions(missions, dt, world) {
       if (!player.inCar && d < step.radius) {
         missions.hasCrate = true;
         done = true;
+        // Some pickups are hot: the ABPD is watching the spot.
+        if (step.heat) setWanted(world.police, step.heat);
+      }
+      break;
+    }
+    case 'fare': {
+      // A cab fare: drive to the waiting customer, then to their
+      // destination. Each drop pays on the spot; the chain of three
+      // finishes the step.
+      const fare = step.fares[missions.fare];
+      if (!fare) {
+        done = true;
+        break;
+      }
+      if (missions.fareLeg === 'pickup') {
+        const d = Math.hypot(player.x - fare.px, player.y - fare.py);
+        if (player.inCar && d < 70) {
+          missions.fareLeg = 'drop';
+          missions.fareEvent = 'pickup';
+          missions.fareEventText = fare.to;
+          removeFarePed(missions, world);
+        }
+      } else {
+        const d = Math.hypot(player.x - fare.dx, player.y - fare.dy);
+        if (player.inCar && d < 90) {
+          player.cash += step.farePay || 150;
+          missions.fare += 1;
+          missions.fareLeg = 'pickup';
+          missions.fareEvent = 'drop';
+          missions.fareEventText = String(step.farePay || 150);
+          if (missions.fare >= step.fares.length) {
+            done = true;
+          } else {
+            spawnFarePed(missions, world, step.fares[missions.fare]);
+          }
+        }
       }
       break;
     }
@@ -303,7 +466,7 @@ export function updateMissions(missions, dt, world) {
   missions.index += 1;
   if (missions.index >= MISSIONS.length) {
     missions.storyComplete = true;
-    showBanner(missions, 'Story complete', 'Leo did it — the Azure Heist is his. Azure Bay is yours now.');
+    showBanner(missions, 'Story complete', 'Leo did it — the Meridian Job is his. Azure Bay is yours now.');
   }
   return { completed: true, failed: false, reward };
 }
@@ -312,5 +475,9 @@ export function retryMission(missions, world) {
   world.rivals.length = 0;
   missions.hasCrate = false;
   missions.checkpoint = 0;
+  missions.fare = 0;
+  missions.fareLeg = 'pickup';
+  missions.fareEvent = null;
+  clearFarePeds(world);
   startMission(missions, world);
 }

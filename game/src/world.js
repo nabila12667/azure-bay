@@ -82,7 +82,7 @@ export function createWorld(seed) {
     bannerTitle: '',
     bannerText: '',
     bannerTimer: 0,
-    objectiveText: 'Job 1/8 — First Wheels: Steal any car',
+    objectiveText: 'Job 1/12 — First Wheels: Steal any car',
     missionTimer: 0,
     marker: null,
     crateAt: null,
@@ -421,6 +421,12 @@ export function stepWorld(state, dt, input, aimAngle, actionBits) {
   }
   const policeEvents = updatePolice(state.police, dt, player, state.city);
   if (policeEvents.busted) events |= EVENT_BUSTED;
+  // The helicopter arrives with a warning: the heat will not decay while
+  // it is overhead.
+  if (state.police.heli && !state.police.heliAnnounced) {
+    state.police.heliAnnounced = true;
+    addMessage(state, 'ABPD helicopter overhead — the heat will not fade', '#ff5a4e');
+  }
 
   updatePedestrians(state.peds, dt, state.random, state.city);
   updateRivals(state.rivals, dt, state.combat, player, state.city);
@@ -509,6 +515,14 @@ export function stepWorld(state, dt, input, aimAngle, actionBits) {
     }
   }
   const missionEvents = updateMissions(state.missions, dt, state);
+  // Cab fares report as they happen, with the fare money on the spot.
+  if (state.missions.fareEvent === 'pickup') {
+    addMessage(state, `Fare aboard — take them to ${state.missions.fareEventText}`, '#ffd23a');
+    state.missions.fareEvent = null;
+  } else if (state.missions.fareEvent === 'drop') {
+    addMessage(state, `Fare dropped — +$${state.missions.fareEventText}`, '#58d68d');
+    state.missions.fareEvent = null;
+  }
   if (missionEvents.failed) {
     events |= EVENT_MISSION_FAILED;
     addMessage(state, 'Mission failed — try again', '#ff5a4e');

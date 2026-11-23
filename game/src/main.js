@@ -3,7 +3,7 @@
 // renderer paints what is there. The game moves between five screens:
 // title, play, paused, busted/wasted, and story complete.
 //
-// ?seed=N fixes the city. ?shot=heist|race|chase|night (with &seed=N)
+// ?seed=N fixes the city. ?shot=meridian|rally|heli|airfield (with &seed=N)
 // stages that scene instead of running the loop, paints it twice and sets
 // window.__shotReady for a screenshot.
 
@@ -104,7 +104,7 @@ function runGame() {
     screen = SCREEN_PLAY;
     audio.unlock();
     audio.startMusic();
-    announce('Playing. Steal a car — the first of eight jobs is waiting.');
+    announce('Playing. Steal a car — the first of twelve jobs is waiting.');
   }
 
   function endRun(title) {

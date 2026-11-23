@@ -165,7 +165,8 @@ function startAt(state, index) {
   check('heist loot step completes', s.missions.step === 2, `step ${s.missions.step}`);
   teleport(s, PLACES.lighthouse.x, PLACES.lighthouse.y);
   const events = step(s, 1);
-  check('heist completes the story', (events & EVENT_MISSION_DONE) !== 0 && s.missions.storyComplete, `complete ${s.missions.storyComplete}`);
+  check('heist completes and moves on', (events & EVENT_MISSION_DONE) !== 0 && s.missions.index === 8, `index ${s.missions.index}`);
+  check('heist does not end the story yet', !s.missions.storyComplete, `complete ${s.missions.storyComplete}`);
   check('heist pays $2,500', s.player.cash === 2500, `$${s.player.cash}`);
 }
 
@@ -356,11 +357,130 @@ function startAt(state, index) {
   check('same seed builds the same city', sameBuildings && sameStashes, `${a.city.buildings.length} buildings`);
 }
 
-// 23. Eight missions, and the HUD names the job number.
+// 23. Twelve missions, and the HUD names the job number.
 {
-  check('eight missions in the story', MISSION_COUNT === 8 && MISSIONS.length === 8, `${MISSIONS.length}`);
+  check('twelve missions in the story', MISSION_COUNT === 12 && MISSIONS.length === 12, `${MISSIONS.length}`);
   const s = createWorld(7);
-  check('objective names Job 1/8', s.objectiveText.startsWith('Job 1/8'), s.objectiveText);
+  check('objective names Job 1/12', s.objectiveText.startsWith('Job 1/12'), s.objectiveText);
+}
+
+// 24. Mission 9: the cab fares need a car, pay $150 a drop, and finish after three.
+{
+  const s = createWorld(7);
+  const m = startAt(s, 8);
+  check('cab spawns a waiting fare customer', s.peds.some((p) => p.fare && p.state === 'wait'), `${s.peds.filter((p) => p.fare).length} fare peds`);
+  const fare = m.steps[0].fares[0];
+  teleport(s, fare.px, fare.py);
+  step(s, 3);
+  check('cab pickup does not count on foot', s.missions.fareLeg === 'pickup', s.missions.fareLeg);
+  const car = createCar(s.player.x + 10, s.player.y, 0, 'taxi', s.random);
+  s.cars.push(car);
+  enterCar(s.player, car, s);
+  teleport(s, fare.px, fare.py);
+  step(s, 1);
+  check('cab pickup counts in a car', s.missions.fareLeg === 'drop', s.missions.fareLeg);
+  check('cab pickup removes the waiting customer', !s.peds.some((p) => p.fare), 'fare ped still there');
+  teleport(s, fare.dx, fare.dy);
+  const cashBefore = s.player.cash;
+  step(s, 1);
+  check('cab drop pays $150', s.player.cash === cashBefore + 150, `$${s.player.cash}`);
+  for (const f of m.steps[0].fares.slice(1)) {
+    teleport(s, f.px, f.py);
+    step(s, 1);
+    check('next cab pickup counts in a car', s.missions.fareLeg === 'drop', s.missions.fareLeg);
+    teleport(s, f.dx, f.dy);
+    step(s, 1);
+  }
+  check('cab completes after three fares', s.missions.index === 9, `index ${s.missions.index}`);
+  check('cab pays three drops plus its $250 reward', s.player.cash === 150 * 3 + 250, `$${s.player.cash}`);
+}
+
+// 25. Mission 10: the airfield pickup is hot, and the cargo pays $1,100.
+{
+  const s = createWorld(7);
+  const m = startAt(s, 9);
+  teleport(s, PLACES.airfield.x, PLACES.airfield.y);
+  step(s, 1);
+  check('airfield pickup sets two wanted stars', s.police.wanted === 2, `${s.police.wanted}`);
+  check('airfield pickup step completes', s.missions.step === 1, `step ${s.missions.step}`);
+  teleport(s, PLACES.warehouse.x, PLACES.warehouse.y);
+  const events = step(s, 1);
+  check('airfield cargo completes', (events & EVENT_MISSION_DONE) !== 0 && s.missions.index === 10, `index ${s.missions.index}`);
+  check('airfield cargo pays $1,100', s.player.cash === 1100, `$${s.player.cash}`);
+}
+
+// 26. Mission 11: the midnight rally runs eight gates in a car.
+{
+  const s = createWorld(7);
+  const m = startAt(s, 10);
+  const gates = m.steps[1].points;
+  check('rally has eight gates', gates.length === 8, `${gates.length}`);
+  teleport(s, gates[0].x, gates[0].y);
+  step(s, 3);
+  check('rally gate does not count on foot', s.missions.checkpoint === 0, `checkpoint ${s.missions.checkpoint}`);
+  const car = createCar(s.player.x + 10, s.player.y, 0, 'sports', s.random);
+  s.cars.push(car);
+  enterCar(s.player, car, s);
+  step(s, 1);
+  for (const p of gates) {
+    teleport(s, p.x, p.y);
+    step(s, 1);
+  }
+  check('rally completes', s.missions.index === 11, `index ${s.missions.index}`);
+  check('rally pays $1,800', s.player.cash === 1800, `$${s.player.cash}`);
+}
+
+// 27. Mission 12: the Meridian Job spawns five casino guards and ends the story.
+{
+  const s = createWorld(7);
+  startAt(s, 11);
+  check('meridian spawns five casino guards', s.rivals.length === 5 && s.rivals.every((r) => r.kind === 'guard'), `${s.rivals.length} rivals`);
+  check('meridian sets two wanted stars', s.police.wanted === 2, `${s.police.wanted}`);
+  for (const r of s.rivals) { r.hp = 0; r.state = 'dead'; }
+  step(s, 1);
+  check('meridian eliminate step completes', s.missions.step === 1, `step ${s.missions.step}`);
+  teleport(s, PLACES.casino.x, PLACES.casino.y);
+  step(s, 1);
+  check('meridian loot step completes', s.missions.step === 2, `step ${s.missions.step}`);
+  teleport(s, PLACES.safehouse.x, PLACES.safehouse.y);
+  const events = step(s, 1);
+  check('meridian completes the story', (events & EVENT_MISSION_DONE) !== 0 && s.missions.storyComplete, `complete ${s.missions.storyComplete}`);
+  check('meridian pays $3,000', s.player.cash === 3000, `$${s.player.cash}`);
+}
+
+// 28. The helicopter arrives at five stars, blocks the wanted decay, and leaves below five.
+{
+  const s = createWorld(7);
+  setWanted(s.police, 5);
+  step(s, 1);
+  check('helicopter spawns at five stars', !!s.police.heli, 'no heli');
+  // Clear the cruisers every step so only the helicopter can hold the
+  // heat: fresh cruisers always spawn at least 750 away, too far to see
+  // Leo, so without the helicopter the level would decay in 12 seconds.
+  for (let i = 0; i < 60 * 13; i += 1) {
+    s.police.cars.length = 0;
+    s.police.cops.length = 0;
+    step(s, 1);
+  }
+  check('helicopter blocks wanted decay', s.police.wanted === 5 && s.police.decayTimer === 0, `${s.police.wanted} stars, timer ${s.police.decayTimer}`);
+  setWanted(s.police, 4);
+  step(s, 1);
+  check('helicopter leaves below five stars', !s.police.heli, 'heli still there');
+}
+
+// 29. The Airfield district, the airfield buildings and the casino.
+{
+  const s = createWorld(7);
+  check('district Airfield', districtOf(500, 500) === 'Airfield');
+  check('district Old Town below the airfield', districtOf(500, 1000) === 'Old Town');
+  const hangar = s.city.buildings.find((b) => b.hangar);
+  const plane = s.city.buildings.find((b) => b.plane);
+  const casino = s.city.buildings.find((b) => b.casino);
+  check('airfield has a hangar and a plane', !!hangar && !!plane, `${hangar ? 'hangar' : 'no hangar'}, ${plane ? 'plane' : 'no plane'}`);
+  check('casino building stands south of the plaza', !!casino && casino.x === 2400 && casino.y === 1900, casino ? `${casino.x},${casino.y}` : 'no casino');
+  const ordinary = s.city.buildings.filter((b) => b.x >= 389 && b.x < 891 && b.y >= 389 && b.y < 745 && !b.hangar && !b.plane);
+  check('no ordinary buildings in the airfield block', ordinary.length === 0, `${ordinary.length} buildings`);
+  check('airfield and casino are on the city', !!s.city.airfield && !!s.city.casino, 'missing');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

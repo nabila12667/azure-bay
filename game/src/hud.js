@@ -5,8 +5,9 @@
 // The top-left panel now carries the whole run at a glance: Leo's health
 // and cash, his current gun and ammo, the hidden stashes found, Rosa's
 // tuning level, the district and time of day, and the car's health while
-// he drives. The minimap shows the park, the plaza, the marina, district
-// names, stash dots and the rivals as red dots.
+// he drives. The minimap shows the park, the plaza, the marina, the
+// airfield and the casino, district names, stash dots, the rivals as red
+// dots, and the police helicopter as a white ring.
 
 import { FONT, PALETTE, VIEW, PLACES, STASH_TOTAL } from './config.js';
 import { ROADS_X, ROADS_Y } from './city.js';
@@ -199,6 +200,11 @@ function drawMinimap(ctx, state, w, h) {
   for (const dock of state.city.docks) {
     ctx.fillRect(mx + dock.x * scaleX, my + dock.y * scaleY, 4, dock.h * scaleY);
   }
+  // The airfield tarmac and the Meridian Casino.
+  ctx.fillStyle = '#8a8f98';
+  ctx.fillRect(mx + 389 * scaleX, my + 389 * scaleY, 502 * scaleX, 356 * scaleY);
+  ctx.fillStyle = '#3b2d5e';
+  ctx.fillRect(mx + 2400 * scaleX, my + 1900 * scaleY, 320 * scaleX, 180 * scaleY);
   // Roads.
   ctx.strokeStyle = '#3d4450';
   ctx.lineWidth = 3;
@@ -222,6 +228,7 @@ function drawMinimap(ctx, state, w, h) {
   ctx.fillText('DOWNTOWN', mx + 1920 * scaleX, my + 1260 * scaleY);
   ctx.fillText('HARBOR', mx + 3200 * scaleX, my + 1260 * scaleY);
   ctx.fillText('MARINA', mx + 3360 * scaleX, my + 2340 * scaleY);
+  ctx.fillText('AIRFIELD', mx + 640 * scaleX, my + 560 * scaleY);
   ctx.textAlign = 'left';
   // Hidden stashes as gold dots.
   ctx.fillStyle = '#ffd23a';
@@ -250,12 +257,19 @@ function drawMinimap(ctx, state, w, h) {
     ctx.lineWidth = 1.5;
     ctx.stroke();
   }
-  // Police, blue; player, white with a dark ring.
+  // Police, blue; the helicopter, a white ring; player, white with a dark ring.
   ctx.fillStyle = '#3a6fd8';
   for (const car of state.police.cars) {
     ctx.beginPath();
     ctx.arc(mx + car.x * scaleX, my + car.y * scaleY, 3, 0, Math.PI * 2);
     ctx.fill();
+  }
+  if (state.police.heli) {
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(mx + state.police.heli.x * scaleX, my + state.police.heli.y * scaleY, 4, 0, Math.PI * 2);
+    ctx.stroke();
   }
   const player = state.player;
   ctx.fillStyle = '#ffffff';

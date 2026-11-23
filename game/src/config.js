@@ -128,5 +128,7 @@ export const PLACES = {
   plaza: { x: 1920, y: 1500, name: 'Downtown Plaza' },
   bank: { x: 2240, y: 1500, name: 'Azure Bank' },
   marina: { x: 3360, y: 2320, name: 'Marina' },
+  airfield: { x: 520, y: 510, name: 'Azure Field Hangar' },
+  casino: { x: 2560, y: 2130, name: 'The Meridian Casino' },
   playerStart: { x: 1600, y: 1280 },
 };
