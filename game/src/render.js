@@ -80,6 +80,7 @@ export function createRenderer(canvas) {
     drawRivals(state);
     drawCops(state);
     drawCars(state);
+    drawBoats(state);
     drawPlayer(state);
     drawBullets(state);
     drawParticles(state);
@@ -593,6 +594,73 @@ export function createRenderer(canvas) {
     for (const car of state.police.cars) drawCarShape(car);
   }
 
+  function drawBoats(state) {
+    // Leo's speedboats and the ABPD boats: a long hull, a cabin, and a
+    // pale wake fanning out behind a boat at speed.
+    for (const boat of [...state.boats, ...state.police.boats]) {
+      if (boat.sunk) continue;
+      ctx.save();
+      ctx.translate(boat.x, boat.y);
+      if (Math.abs(boat.speed) > 120) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.beginPath();
+        ctx.moveTo(-Math.cos(boat.angle) * 38, -Math.sin(boat.angle) * 38);
+        ctx.lineTo(-Math.cos(boat.angle) * 70 - Math.sin(boat.angle) * 16, -Math.sin(boat.angle) * 70 + Math.cos(boat.angle) * 16);
+        ctx.lineTo(-Math.cos(boat.angle) * 70 + Math.sin(boat.angle) * 16, -Math.sin(boat.angle) * 70 - Math.cos(boat.angle) * 16);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.rotate(boat.angle);
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.beginPath();
+      ctx.roundRect(-40, -11, 80, 24, 11);
+      ctx.fill();
+      ctx.fillStyle = boat.hull;
+      ctx.beginPath();
+      ctx.moveTo(-38, -12);
+      ctx.lineTo(26, -12);
+      ctx.quadraticCurveTo(40, 0, 26, 12);
+      ctx.lineTo(-38, 12);
+      ctx.quadraticCurveTo(-44, 0, -38, -12);
+      ctx.fill();
+      ctx.fillStyle = '#202a36';
+      ctx.beginPath();
+      ctx.roundRect(-14, -8, 22, 16, 5);
+      ctx.fill();
+      if (boat.kind === 'police') {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-34, -12, 10, 4);
+        ctx.fillStyle = '#3a6fd8';
+        ctx.fillRect(-34, 8, 10, 4);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '700 9px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('ABPD', -3, 3);
+        ctx.textAlign = 'left';
+        const phase = Math.floor(performance.now() / 180) % 2 === 0;
+        ctx.fillStyle = phase ? '#ff3b30' : '#3a6fd8';
+        ctx.beginPath();
+        ctx.arc(-10, -8, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = phase ? '#3a6fd8' : '#ff3b30';
+        ctx.beginPath();
+        ctx.arc(-10, 8, 3, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = '#d94f3d';
+        ctx.fillRect(-36, -3, 12, 6);
+      }
+      ctx.restore();
+      // Hull health bar while a boat is hurt.
+      if (boat.hp < 100) {
+        ctx.fillStyle = '#20242c';
+        ctx.fillRect(boat.x - 20, boat.y - 30, 40, 5);
+        ctx.fillStyle = boat.hp > 30 ? '#58d68d' : '#ff5a4e';
+        ctx.fillRect(boat.x - 20, boat.y - 30, 40 * Math.max(0, boat.hp / 100), 5);
+      }
+    }
+  }
+
   function drawPlayer(state) {
     const player = state.player;
     if (player.inCar) return;
@@ -873,7 +941,7 @@ export function createRenderer(canvas) {
       ctx.font = `15px ${FONT}`;
       ctx.fillText('WASD drive & walk · Mouse aim · Click shoot · E steal a car · SPACE punch', VIEW.width / 2, 410);
       ctx.fillText('R repair & tune at Rosa\u2019s Garage · Q switch weapon · P pause', VIEW.width / 2, 436);
-      ctx.fillText('Steal cars. Lose the cops. Run the twelve jobs for Mara Voss.', VIEW.width / 2, 466);
+      ctx.fillText('Steal cars. Sail the bay. Lose the cops. Run the thirteen jobs for Mara Voss.', VIEW.width / 2, 466);
       if (best > 0) {
         ctx.fillStyle = PALETTE.muted;
         ctx.fillText(`Best haul: $${best.toLocaleString('en-US')}`, VIEW.width / 2, 504);
@@ -931,7 +999,7 @@ export function createRenderer(canvas) {
       ctx.fillText('THE MERIDIAN JOB', VIEW.width / 2, 260);
       ctx.fillStyle = PALETTE.text;
       ctx.font = `18px ${FONT}`;
-      ctx.fillText('Leo pulled it off. Twelve jobs, one city, his name on every corner.', VIEW.width / 2, 302);
+      ctx.fillText('Leo pulled it off. Thirteen jobs, one city, his name on every corner.', VIEW.width / 2, 302);
       ctx.fillText(`Total haul: $${Math.floor(state.player.cash).toLocaleString('en-US')}`, VIEW.width / 2, 332);
       ctx.fillStyle = PALETTE.muted;
       ctx.font = `15px ${FONT}`;

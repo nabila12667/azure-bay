@@ -1,14 +1,15 @@
-// The screenshot scenes behind ?shot=meridian|rally|heli|airfield. Each
+// The screenshot scenes behind ?shot=boat|meridian|rally|heli|airfield. Each
 // one plays the real rules forward from a fresh world for a fixed number
 // of steps, steered by a simple autopilot, so the frame is what a short
 // game really looks like and the same seed always gives the same frame.
-// The cover is the Meridian Job: five casino guards, the shotgun, five
-// wanted stars, the police helicopter with its searchlight, the vault loot
-// and the minimap all on screen at once.
+// The cover is the Smuggler's Run: Leo at the helm of the speedboat at
+// dusk, the wake behind him, an ABPD boat in pursuit and the Marina on
+// the minimap.
 
 import { STEP, PLACES } from './config.js';
 import { stepWorld, resetWorld } from './world.js';
 import { enterCar, exitCar } from './player.js';
+import { enterBoat } from './boats.js';
 import { setWanted } from './police.js';
 import { startMission } from './missions.js';
 import { SCREEN_PLAY, SCREEN_TITLE } from './render.js';
@@ -18,6 +19,7 @@ const MERIDIAN_SECONDS = 5;
 const RALLY_SECONDS = 7;
 const HELI_SECONDS = 5;
 const AIRFIELD_SECONDS = 5;
+const BOAT_SECONDS = 6;
 
 /** A scripted input for the autopilot: it answers move() from a function. */
 function scriptedInput(moveFn) {
@@ -136,6 +138,36 @@ export function stageShot(name, state) {
     setWanted(state.police, 5);
     const input = scriptedInput(() => walkToward(state, 2880, 1280));
     for (let i = 0; i < HELI_SECONDS / STEP; i += 1) {
+      stepWorld(state, STEP, input, player.angle);
+    }
+    return { screen: SCREEN_PLAY, best: 0 };
+  }
+  if (name === 'boat') {
+    // The Smuggler's Run: Leo boards the speedboat at the Marina at dusk
+    // and sails west down the bay toward Smuggler's Cove, three stars on
+    // him, an ABPD boat in pursuit behind the wake — the Marina, the
+    // beach and the whole southern shore in frame.
+    state.dayTime = 0.45;
+    state.missions.index = 12;
+    startMission(state.missions, state);
+    state.missions.bannerTimer = 0;
+    const boat = state.boats[0];
+    player.x = boat.x;
+    player.y = boat.y;
+    enterBoat(player, boat);
+    player.cash = 1600;
+    setWanted(state.police, 3);
+    const target = { x: 700, y: 2510 };
+    const input = scriptedInput(() => {
+      const b = state.player.inBoat;
+      if (!b) return { x: 0, y: 0 };
+      const targetAngle = Math.atan2(target.y - b.y, target.x - b.x);
+      let diff = targetAngle - b.angle;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      return { x: Math.max(-1, Math.min(1, diff * 2.2)), y: -1 };
+    });
+    for (let i = 0; i < BOAT_SECONDS / STEP; i += 1) {
       stepWorld(state, STEP, input, player.angle);
     }
     return { screen: SCREEN_PLAY, best: 0 };

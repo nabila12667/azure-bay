@@ -14,6 +14,7 @@ import { createCity, nearestRoadPoint, randomIntersection, resolveBuildings, dis
 import { createRandom } from './random.js';
 import { createPlayer, updatePlayer, nearestEnterableCar, enterCar, exitCar, hurtPlayer, switchWeapon } from './player.js';
 import { createCar, driveCar, updateTraffic, collideCars, collideWorld, spawnTrafficCar, KIND_POLICE } from './vehicles.js';
+import { createBoat, driveBoat, nearestEnterableBoat, enterBoat, exitBoat } from './boats.js';
 import { createPedestrian, updatePedestrians, frighten, hitByCar } from './pedestrians.js';
 import { createPolice, addWanted, setWanted, updatePolice, clearPolice } from './police.js';
 import { createCombat, updateBullets, updateParticles, updatePickups, addPickup, explode, spawnParticles, spawnSkid, PICKUP_HEALTH, PICKUP_AMMO, PICKUP_CASH, PICKUP_SHELLS, PICKUP_STASH } from './combat.js';
@@ -70,6 +71,7 @@ export function createWorld(seed) {
   const state = {
     city, random, player, police, combat, missions,
     cars: [],
+    boats: [],
     peds: [],
     rivals: [],
     time: 0,
@@ -82,7 +84,7 @@ export function createWorld(seed) {
     bannerTitle: '',
     bannerText: '',
     bannerTimer: 0,
-    objectiveText: 'Job 1/12 — First Wheels: Steal any car',
+    objectiveText: 'Job 1/13 — First Wheels: Steal any car',
     missionTimer: 0,
     marker: null,
     crateAt: null,
@@ -98,6 +100,7 @@ export function createWorld(seed) {
     stats: { carsStolen: 0, pedsDown: 0, shotsFired: 0, stashesFound: 0 },
   };
   seedTraffic(state);
+  seedBoats(state);
   seedPeds(state);
   seedStashes(state);
   addPickup(combat, PICKUP_HEALTH, PLACES.hospital.x + 40, PLACES.hospital.y, 40);
@@ -123,6 +126,12 @@ function seedTraffic(state) {
     car.speed = 0;
     state.cars.push(car);
   }
+}
+
+function seedBoats(state) {
+  // Two speedboats moored at the Marina docks, ready to board.
+  state.boats.push(createBoat(3240, 2500, Math.PI / 2, 'speedboat'));
+  state.boats.push(createBoat(3700, 2500, Math.PI / 2, 'speedboat'));
 }
 
 function seedPeds(state) {
@@ -220,6 +229,7 @@ export function resetWorld(state, keepProgress) {
   player.angle = 0;
   player.health = 100;
   player.inCar = null;
+  player.inBoat = null;
   player.invulnerable = 0;
   player.ammo = keepProgress && player.hasPistol ? player.ammo : 0;
   player.shells = keepProgress && player.hasShotgun ? player.shells : 0;
@@ -235,9 +245,11 @@ export function resetWorld(state, keepProgress) {
   clearPolice(state.police);
   state.rivals.length = 0;
   state.cars.length = 0;
+  state.boats.length = 0;
   state.peds.length = 0;
   state.messages.length = 0;
   seedTraffic(state);
+  seedBoats(state);
   seedPeds(state);
   state.time = 0;
 }
@@ -286,9 +298,41 @@ export function stepWorld(state, dt, input, aimAngle, actionBits) {
   state.messages = state.messages.filter((msg) => msg.life > 0);
   if (state.bannerTimer > 0) state.bannerTimer -= dt;
 
-  // --- Leo: on foot or behind the wheel.
+  // --- Leo: on foot, behind the wheel, or at the helm of a boat.
   const move = input.move();
-  if (player.inCar) {
+  if (player.inBoat) {
+    const boat = player.inBoat;
+    const throttle = move.y < 0 ? 1 : move.y > 0 ? -1 : 0;
+    const steer = move.x;
+    const brake = move.y > 0 && boat.speed > 5;
+    const wasSpeed = boat.speed;
+    driveBoat(boat, dt, throttle, steer, brake);
+    player.x = boat.x;
+    player.y = boat.y;
+    player.angle = boat.angle;
+    // A fast boat leaves a white wake behind it.
+    if (Math.abs(wasSpeed) > 200) {
+      boat.wakeTimer -= dt;
+      if (boat.wakeTimer <= 0) {
+        boat.wakeTimer = 0.08;
+        spawnParticles(state.combat,
+          boat.x - Math.cos(boat.angle) * 40, boat.y - Math.sin(boat.angle) * 40,
+          2, '#cfeef7', 40, 0.7);
+      }
+    }
+    // An ABPD boat ramming Leo's boat at speed dents the hull — but a
+    // ram only lands once every half second, so one boat cannot shred
+    // his hull in a single pass.
+    boat.ramCooldown = Math.max(0, (boat.ramCooldown || 0) - dt);
+    for (const cop of state.police.boats) {
+      const d = Math.hypot(cop.x - boat.x, cop.y - boat.y);
+      if (d < 56 && Math.abs(cop.speed - boat.speed) > 120 && boat.ramCooldown <= 0) {
+        boat.hp -= 4;
+        boat.ramCooldown = 0.5;
+        spawnParticles(state.combat, cop.x, cop.y, 3, '#cfeef7', 90, 0.3);
+      }
+    }
+  } else if (player.inCar) {
     const car = player.inCar;
     const throttle = move.y < 0 ? 1 : move.y > 0 ? -1 : 0;
     const steer = move.x;
@@ -325,7 +369,7 @@ export function stepWorld(state, dt, input, aimAngle, actionBits) {
   }
 
   // --- Switch weapon (Q) while on foot.
-  if ((pressed & ACTION_SWITCH) && !player.inCar) {
+  if ((pressed & ACTION_SWITCH) && !player.inCar && !player.inBoat) {
     const next = switchWeapon(player);
     if (next) addMessage(state, next === 'shotgun' ? 'Shotgun ready' : 'Pistol ready', '#ffd23a');
   }
@@ -367,31 +411,42 @@ export function stepWorld(state, dt, input, aimAngle, actionBits) {
     }
   }
 
-  // --- Enter or exit a car (the one-shot press, handed in by the loop).
+  // --- Enter or exit a car or a boat (the one-shot press, handed in by
+  // the loop). Boats are checked first: no car ever sits within reach of
+  // one, so the two never fight over the same press.
   if (pressed & ACTION_ENTER) {
-    if (player.inCar) {
+    if (player.inBoat) {
+      exitBoat(player);
+      addMessage(state, 'Docked — back on dry land', '#f2ede0');
+    } else if (player.inCar) {
       exitCar(player, state);
     } else {
-      const car = nearestEnterableCar(player, state.cars);
-      if (car) {
-        const hadDriver = car.driver;
-        enterCar(player, car, state);
-        state.stats.carsStolen += 1;
-        if (hadDriver) {
-          if (state.pulledDriver) {
-            const ped = createPedestrian(state.pulledDriver.x, state.pulledDriver.y, state.random);
-            ped.state = 'flee';
-            ped.fleeTimer = 3;
-            ped.fleeX = ped.x + (state.random() - 0.5) * 400;
-            ped.fleeY = ped.y + (state.random() - 0.5) * 400;
-            state.peds.push(ped);
-            state.pulledDriver = null;
+      const boat = nearestEnterableBoat(player, state.boats);
+      if (boat) {
+        enterBoat(player, boat);
+        addMessage(state, 'At the helm — sail the bay', '#ffd23a');
+      } else {
+        const car = nearestEnterableCar(player, state.cars);
+        if (car) {
+          const hadDriver = car.driver;
+          enterCar(player, car, state);
+          state.stats.carsStolen += 1;
+          if (hadDriver) {
+            if (state.pulledDriver) {
+              const ped = createPedestrian(state.pulledDriver.x, state.pulledDriver.y, state.random);
+              ped.state = 'flee';
+              ped.fleeTimer = 3;
+              ped.fleeX = ped.x + (state.random() - 0.5) * 400;
+              ped.fleeY = ped.y + (state.random() - 0.5) * 400;
+              state.peds.push(ped);
+              state.pulledDriver = null;
+            }
+            if (addWanted(state.police, 1)) {
+              events |= EVENT_WANTED_UP;
+              addMessage(state, 'Grand theft auto — wanted level up', '#ff5a4e');
+            }
+            addMessage(state, 'You stole the car', '#ffd23a');
           }
-          if (addWanted(state.police, 1)) {
-            events |= EVENT_WANTED_UP;
-            addMessage(state, 'Grand theft auto — wanted level up', '#ff5a4e');
-          }
-          addMessage(state, 'You stole the car', '#ffd23a');
         }
       }
     }
@@ -484,6 +539,25 @@ export function stepWorld(state, dt, input, aimAngle, actionBits) {
   state.cars = state.cars.filter((car) => !car.exploded);
   state.police.cars = state.police.cars.filter((car) => !car.exploded);
 
+  // --- Sinking boats: a hull at zero health goes under. If Leo is
+  // aboard, he swims out and takes the hit.
+  for (const boat of [...state.boats, ...state.police.boats]) {
+    if (boat.sunk) continue;
+    if (boat.hp <= 0) {
+      boat.sunk = true;
+      explode(state.combat, boat.x, boat.y);
+      events |= EVENT_EXPLOSION;
+      addMessage(state, 'Boat sunk', '#ff5a4e');
+      if (state.player.inBoat === boat) {
+        exitBoat(state.player);
+        hurtPlayer(state.player, 25);
+        state.damageFlash = 1;
+      }
+    }
+  }
+  state.boats = state.boats.filter((boat) => !boat.sunk);
+  state.police.boats = state.police.boats.filter((boat) => !boat.sunk);
+
   // --- Pickups, stashes and respawning supplies.
   if (collectPickups(state)) events |= EVENT_PICKUP;
   state.pickupTimer -= dt;
@@ -551,9 +625,13 @@ export function stepWorld(state, dt, input, aimAngle, actionBits) {
   state.hint = '';
   if (state.garagePrompt) {
     state.hint = state.garagePrompt;
+  } else if (player.inBoat) {
+    state.hint = 'WASD — sail · S — brake/reverse · E — dock and get out';
   } else if (!player.inCar) {
     const car = nearestEnterableCar(player, state.cars);
+    const boat = nearestEnterableBoat(player, state.boats);
     if (state.crateAt && Math.hypot(player.x - state.crateAt.x, player.y - state.crateAt.y) < 80) state.hint = 'Walk over the crate to pick it up';
+    else if (boat) state.hint = 'E — board the boat';
     else if (car) state.hint = car.driver ? 'E — steal the car' : 'E — get in the car';
     else if (player.weapon) state.hint = 'Click — shoot · Q — switch weapon · SPACE — punch · SHIFT — sprint';
     else state.hint = 'WASD — walk · SPACE — punch · E — get in a car';
@@ -583,6 +661,7 @@ export function applyBusted(state) {
   player.cash -= lost;
   player.health = 100;
   player.inCar = null;
+  player.inBoat = null;
   player.x = PLACES.policeHQ.x;
   player.y = PLACES.policeHQ.y + 80;
   clearPolice(state.police);
@@ -597,6 +676,7 @@ export function applyWasted(state) {
   player.cash -= lost;
   player.health = 100;
   player.inCar = null;
+  player.inBoat = null;
   player.x = PLACES.hospital.x;
   player.y = PLACES.hospital.y + 80;
   state.police.wanted = Math.max(0, Math.floor(state.police.wanted / 2));

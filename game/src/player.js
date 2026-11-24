@@ -25,6 +25,7 @@ export function createPlayer(x, y) {
     weapon: null, // 'pistol' | 'shotgun' | null (fists)
     tuning: 0,
     inCar: null,
+    inBoat: null,
     punchCooldown: 0,
     shootCooldown: 0,
     invulnerable: 0,

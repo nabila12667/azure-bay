@@ -1,22 +1,25 @@
-// The story of Azure Bay: twelve jobs for Leo Marlow, from Mara Voss and
+// The story of Azure Bay: thirteen jobs for Leo Marlow, from Mara Voss and
 // Rosa, each one a small state machine of steps — steal a car, fetch a
 // crate, lose the heat, clear a warehouse, run five drops, then a night
 // courier run that earns the shotgun, an illegal street race, and the
 // finale at the Azure Bank. Round 5 adds four more: a cab shift for Rosa,
 // a hot cargo pickup at the airfield, a midnight rally through eight
 // gates, and the second heist — the Meridian Job at the casino, five
-// guards, a vault and a helicopter overhead. A step is one verb: enter a
-// car, reach a place, pick something up, lose the wanted level, clear the
-// rivals, hit the checkpoints in order, or run a chain of taxi fares. The
-// mission hands the HUD its objective text and its marker, and pays out
-// when the last step lands.
+// guards, a vault and a helicopter overhead. Round 6 adds the thirteenth:
+// the Smuggler's Run — board a speedboat at the Marina, fetch a crate
+// from Smuggler's Cove at the far end of the bay, and bring it back with
+// the ABPD boats on the water. A step is one verb: enter a car, board a
+// boat, reach a place, pick something up, lose the wanted level, clear
+// the rivals, hit the checkpoints in order, or run a chain of taxi fares.
+// The mission hands the HUD its objective text and its marker, and pays
+// out when the last step lands.
 
 import { PLACES } from './config.js';
 import { createRival, aliveRivals } from './rivals.js';
 import { setWanted } from './police.js';
 import { createPedestrian } from './pedestrians.js';
 
-export const MISSION_COUNT = 12;
+export const MISSION_COUNT = 13;
 
 const CHECKPOINTS = [
   { x: 960, y: 800, name: 'Old Town' },
@@ -210,6 +213,19 @@ export const MISSIONS = [
       { type: 'goto', x: PLACES.safehouse.x, y: PLACES.safehouse.y, radius: 100, text: 'Escape to the safehouse' },
     ],
   },
+  {
+    id: 'smugglers-run',
+    title: "The Smuggler's Run",
+    giver: 'Mara Voss',
+    brief: 'One more run, Leo — and this one is on the water. Board the speedboat at the Marina, fetch the crate at Smuggler\u2019s Cove on the far side of the bay, and bring it back. The ABPD boats will be out there too. 150 seconds.',
+    reward: 1600,
+    timer: 150,
+    steps: [
+      { type: 'enter-boat', text: 'Board the speedboat at the Marina' },
+      { type: 'pickup', x: PLACES.smugglerCove.x, y: PLACES.smugglerCove.y, radius: 80, heat: 2, text: 'Pick up the crate at Smuggler\u2019s Cove' },
+      { type: 'goto', x: PLACES.marina.x, y: 2520, radius: 100, inBoat: true, text: 'Bring the cargo back to the Marina' },
+    ],
+  },
 ];
 
 export function createMissions() {
@@ -377,9 +393,12 @@ export function updateMissions(missions, dt, world) {
     case 'enter-car':
       done = !!player.inCar;
       break;
+    case 'enter-boat':
+      done = !!player.inBoat;
+      break;
     case 'goto': {
       const d = Math.hypot(player.x - step.x, player.y - step.y);
-      done = d < step.radius && (!step.inCar || !!player.inCar);
+      done = d < step.radius && (!step.inCar || !!player.inCar) && (!step.inBoat || !!player.inBoat);
       break;
     }
     case 'pickup': {
@@ -466,7 +485,7 @@ export function updateMissions(missions, dt, world) {
   missions.index += 1;
   if (missions.index >= MISSIONS.length) {
     missions.storyComplete = true;
-    showBanner(missions, 'Story complete', 'Leo did it — the Meridian Job is his. Azure Bay is yours now.');
+    showBanner(missions, 'Story complete', 'Leo did it — the Smuggler\u2019s Run is his. Azure Bay is yours now.');
   }
   return { completed: true, failed: false, reward };
 }

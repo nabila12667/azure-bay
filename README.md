@@ -4,20 +4,26 @@
 [![rank](https://make.fun/badge/gta6-01/nabila12667/azure-bay/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 [![reward](https://make.fun/badge/gta6-01/nabila12667/azure-bay/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 
-Azure Bay is an original top-down open-world crime game that runs entirely in the browser: steal cars, outrun the police, and run twelve jobs for fixer Mara Voss across a living city. No libraries, no network requests, nothing from Rockstar or any commercial game.
+Azure Bay is an original top-down open-world crime game that runs entirely in the browser: steal cars, outrun the police, and run thirteen jobs for fixer Mara Voss across a living city. No libraries, no network requests, nothing from Rockstar or any commercial game.
 
 ## Screenshots
 
-![The Meridian Job](screenshots/1-meridian.jpg)
-![Midnight Rally at night in the rain](screenshots/2-rally.jpg)
-![Five-star chase with the police helicopter](screenshots/3-heli.jpg)
-![Airfield Cargo at Azure Field](screenshots/4-airfield.jpg)
+![The Smuggler's Run by speedboat](screenshots/1-boat.jpg)
+![The Meridian Job](screenshots/2-meridian.jpg)
+![Midnight Rally at night in the rain](screenshots/3-rally.jpg)
+![Five-star chase with the police helicopter](screenshots/4-heli.jpg)
+
+## What's new in round 6
+
+- **A driveable boat from the Marina:** two speedboats moored at the docks — board one with E and sail the bay, with a white wake at speed, a hull-health bar, and the boat on the HUD and the minimap.
+- **A thirteenth job, the Smuggler's Run:** fetch a crate from Smuggler's Cove at the far end of the bay and bring it back to the Marina, 150 seconds, $1,600 — the new finale.
+- **ABPD boats:** at three stars the police launch boats that chase Leo on the water and ram his hull; at five stars the helicopter is overhead too. A boat at zero health sinks, and Leo swims out hurt.
 
 ## What's new in round 5
 
-- **Four new jobs (twelve in all):** Cab for Hire — three taxi fares across town, $150 a drop, with a waiting customer at each pickup; Airfield Cargo — a hot pickup at the new airfield that brings two stars with it; Midnight Rally — eight gates, a full lap of the city after dark; and the new finale, the Meridian Job — five casino guards, the vault, and a police helicopter overhead.
+- **Four new jobs (twelve at the time):** Cab for Hire — three taxi fares across town, $150 a drop, with a waiting customer at each pickup; Airfield Cargo — a hot pickup at the new airfield that brings two stars with it; Midnight Rally — eight gates, a full lap of the city after dark; and the Meridian Job — five casino guards, the vault, and a police helicopter overhead.
 - **Azure Field, a new district:** the north-west corner is now an airfield with a runway, a hangar, a parked plane and a windsock, and its own name on the HUD and the minimap.
-- **The Meridian Casino:** a purple-and-gold casino with a neon sign, south of Downtown Plaza — the setting for the new finale.
+- **The Meridian Casino:** a purple-and-gold casino with a neon sign, south of Downtown Plaza — the setting for the Meridian Job.
 - **A police helicopter at five stars:** it orbits Leo with a searchlight on him, and the wanted level does not decay while it is up — the safehouse is the way out.
 - **A living bay:** sunlight shimmers on the water at the marina, and the minimap now shows the airfield, the casino and the helicopter.
 

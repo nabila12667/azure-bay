@@ -1,10 +1,10 @@
 // Azure Bay: a complete open-world crime game in the spirit of GTA 6 —
 // a city to explore on foot and by car, traffic and pedestrians, cars to
-// steal, a wanted level with police who chase, twelve missions with a story
+// steal, a wanted level with police who chase, thirteen missions with a story
 // (a night courier run, an illegal street race and a bank heist on top of
 // the first five jobs, then a cab shift, a hot airfield cargo run, a
-// midnight rally and the Meridian casino heist), combat with a pistol and
-// a shotgun, a garage that repairs and tunes cars, hidden stashes, a day
+// midnight rally and the Meridian casino heist, and the Smuggler's Run by
+// speedboat from the Marina), combat with a pistol and a shotgun, a garage that repairs and tunes cars, hidden stashes, a day
 // that slides into night with rain, a HUD with a minimap, and a save. The game is this directory's
 // game/ folder, plain static files a desktop browser loads offline
 // (game/index.html and its ES modules, no library and no network request),

@@ -22,7 +22,7 @@ import { districtOf } from './src/city.js';
 import { MISSIONS, MISSION_COUNT, currentMission, startMission } from './src/missions.js';
 import { fireBullet, updateBullets } from './src/combat.js';
 import { saveGame, loadSave } from './src/save.js';
-import { ACTION_REPAIR } from './src/input.js';
+import { ACTION_ENTER, ACTION_REPAIR } from './src/input.js';
 
 let passed = 0;
 let failed = 0;
@@ -57,6 +57,10 @@ function teleport(state, x, y) {
   if (state.player.inCar) {
     state.player.inCar.x = x;
     state.player.inCar.y = y;
+  }
+  if (state.player.inBoat) {
+    state.player.inBoat.x = x;
+    state.player.inBoat.y = y;
   }
 }
 
@@ -357,11 +361,11 @@ function startAt(state, index) {
   check('same seed builds the same city', sameBuildings && sameStashes, `${a.city.buildings.length} buildings`);
 }
 
-// 23. Twelve missions, and the HUD names the job number.
+// 23. Thirteen missions, and the HUD names the job number.
 {
-  check('twelve missions in the story', MISSION_COUNT === 12 && MISSIONS.length === 12, `${MISSIONS.length}`);
+  check('thirteen missions in the story', MISSION_COUNT === 13 && MISSIONS.length === 13, `${MISSIONS.length}`);
   const s = createWorld(7);
-  check('objective names Job 1/12', s.objectiveText.startsWith('Job 1/12'), s.objectiveText);
+  check('objective names Job 1/13', s.objectiveText.startsWith('Job 1/13'), s.objectiveText);
 }
 
 // 24. Mission 9: the cab fares need a car, pay $150 a drop, and finish after three.
@@ -444,7 +448,8 @@ function startAt(state, index) {
   check('meridian loot step completes', s.missions.step === 2, `step ${s.missions.step}`);
   teleport(s, PLACES.safehouse.x, PLACES.safehouse.y);
   const events = step(s, 1);
-  check('meridian completes the story', (events & EVENT_MISSION_DONE) !== 0 && s.missions.storyComplete, `complete ${s.missions.storyComplete}`);
+  check('meridian completes and moves on', (events & EVENT_MISSION_DONE) !== 0 && s.missions.index === 12, `index ${s.missions.index}`);
+  check('meridian does not end the story yet', !s.missions.storyComplete, `complete ${s.missions.storyComplete}`);
   check('meridian pays $3,000', s.player.cash === 3000, `$${s.player.cash}`);
 }
 
@@ -481,6 +486,75 @@ function startAt(state, index) {
   const ordinary = s.city.buildings.filter((b) => b.x >= 389 && b.x < 891 && b.y >= 389 && b.y < 745 && !b.hangar && !b.plane);
   check('no ordinary buildings in the airfield block', ordinary.length === 0, `${ordinary.length} buildings`);
   check('airfield and casino are on the city', !!s.city.airfield && !!s.city.casino, 'missing');
+}
+
+// 30. Boats: Leo boards a speedboat at the Marina and sails it down the bay.
+{
+  const s = createWorld(7);
+  check('two speedboats moored at the Marina', s.boats.length === 2 && s.boats.every((b) => b.kind === 'speedboat'), `${s.boats.length} boats`);
+  const boat = s.boats[0];
+  teleport(s, boat.x, boat.y - 40);
+  step(s, 1, idleInput(), 0, ACTION_ENTER);
+  check('Leo boards the boat with E', s.player.inBoat === boat, 'not aboard');
+  boat.angle = Math.PI;
+  const x0 = boat.x;
+  step(s, 300, idleInput(() => ({ x: 0, y: -1 })), 0);
+  check('the boat sails west', boat.x < x0 - 1000, `x ${boat.x.toFixed(0)} from ${x0}`);
+  check('the boat stays in the bay', boat.y >= 2470 && boat.y <= 2540, `y ${boat.y.toFixed(0)}`);
+  step(s, 1, idleInput(), 0, ACTION_ENTER);
+  check('Leo docks back on the beach', !s.player.inBoat && s.player.y < 2400, `y ${s.player.y.toFixed(0)}`);
+}
+
+// 31. Mission 13: the Smuggler's Run needs the boat, pays $1,600, ends the story.
+{
+  const s = createWorld(7);
+  const m = startAt(s, 12);
+  check('smugglers run is the thirteenth job', m.id === 'smugglers-run' && MISSION_COUNT === 13, m.id);
+  const boat = s.boats[0];
+  teleport(s, boat.x, boat.y - 40);
+  step(s, 1, idleInput(), 0, ACTION_ENTER);
+  check('smugglers run boards the boat', s.missions.step === 1, `step ${s.missions.step}`);
+  teleport(s, PLACES.smugglerCove.x, PLACES.smugglerCove.y);
+  step(s, 1);
+  check('smugglers run pickup is hot', s.police.wanted === 2 && s.missions.step === 2, `${s.police.wanted} stars, step ${s.missions.step}`);
+  teleport(s, PLACES.marina.x, 2520);
+  const events = step(s, 1);
+  check('smugglers run completes the story', (events & EVENT_MISSION_DONE) !== 0 && s.missions.storyComplete, `complete ${s.missions.storyComplete}`);
+  check('smugglers run pays $1,600', s.player.cash === 1600, `$${s.player.cash}`);
+}
+
+// 32. ABPD boats chase Leo on the water at three stars, and leave when the heat drops.
+{
+  const s = createWorld(7);
+  const boat = s.boats[0];
+  teleport(s, boat.x, boat.y - 40);
+  step(s, 1, idleInput(), 0, ACTION_ENTER);
+  setWanted(s.police, 2);
+  step(s, 5);
+  check('no police boat at two stars', s.police.boats.length === 0, `${s.police.boats.length} boats`);
+  setWanted(s.police, 3);
+  step(s, 5);
+  check('police boat launches at three stars', s.police.boats.length === 1, `${s.police.boats.length} boats`);
+  const pb = s.police.boats[0];
+  const d0 = Math.hypot(pb.x - s.player.x, pb.y - s.player.y);
+  step(s, 180);
+  const d1 = Math.hypot(pb.x - s.player.x, pb.y - s.player.y);
+  check('police boat closes on Leo', d1 < d0, `${d0.toFixed(0)} -> ${d1.toFixed(0)}`);
+  setWanted(s.police, 0);
+  step(s, 1);
+  check('police boats leave when the heat is gone', s.police.boats.length === 0, `${s.police.boats.length} boats`);
+}
+
+// 33. A boat at zero health sinks, and Leo swims out hurt.
+{
+  const s = createWorld(7);
+  const boat = s.boats[0];
+  teleport(s, boat.x, boat.y - 40);
+  step(s, 1, idleInput(), 0, ACTION_ENTER);
+  boat.hp = 0;
+  const events = step(s, 1);
+  check('sunk boat explodes and leaves the bay', (events & EVENT_EXPLOSION) !== 0 && !s.boats.includes(boat), 'boat still there');
+  check('Leo swims out of a sunk boat', !s.player.inBoat && s.player.health < 100, `health ${s.player.health}`);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -104,7 +104,7 @@ function runGame() {
     screen = SCREEN_PLAY;
     audio.unlock();
     audio.startMusic();
-    announce('Playing. Steal a car — the first of twelve jobs is waiting.');
+    announce('Playing. Steal a car — the first of thirteen jobs is waiting.');
   }
 
   function endRun(title) {

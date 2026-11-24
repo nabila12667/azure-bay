@@ -77,19 +77,20 @@ export function drawHud(ctx, state, screen, viewScale) {
   ctx.textAlign = 'right';
   ctx.fillText(player.tuning > 0 ? `TUNING Lv${player.tuning}` : 'TUNING Lv0', 264, 88);
   ctx.textAlign = 'left';
-  if (player.inCar) {
-    const car = player.inCar;
+  if (player.inCar || player.inBoat) {
+    const vehicle = player.inCar || player.inBoat;
+    const isBoat = !!player.inBoat;
     ctx.fillStyle = PALETTE.muted;
     ctx.font = `11px ${FONT}`;
-    ctx.fillText('CAR', 26, 104);
+    ctx.fillText(isBoat ? 'BOAT' : 'CAR', 26, 104);
     ctx.fillStyle = '#20242c';
     roundRect(ctx, 58, 95, 120, 9, 4);
     ctx.fill();
-    ctx.fillStyle = car.hp > 30 ? '#58d68d' : PALETTE.danger;
-    roundRect(ctx, 58, 95, Math.max(0, 120 * (car.hp / (car.kind === 'armored' ? 200 : 100))), 9, 4);
+    ctx.fillStyle = vehicle.hp > 30 ? '#58d68d' : PALETTE.danger;
+    roundRect(ctx, 58, 95, Math.max(0, 120 * (vehicle.hp / (vehicle.kind === 'armored' ? 200 : 100))), 9, 4);
     ctx.fill();
     ctx.fillStyle = PALETTE.muted;
-    ctx.fillText(car.kind.toUpperCase(), 186, 104);
+    ctx.fillText(isBoat ? 'SPEEDBOAT' : vehicle.kind.toUpperCase(), 186, 104);
   }
 
   // Top-right: wanted stars.
@@ -262,6 +263,19 @@ function drawMinimap(ctx, state, w, h) {
   for (const car of state.police.cars) {
     ctx.beginPath();
     ctx.arc(mx + car.x * scaleX, my + car.y * scaleY, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  for (const boat of state.police.boats) {
+    ctx.beginPath();
+    ctx.arc(mx + boat.x * scaleX, my + boat.y * scaleY, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Leo's speedboats, pale blue.
+  ctx.fillStyle = '#7fd4e8';
+  for (const boat of state.boats) {
+    if (boat.sunk) continue;
+    ctx.beginPath();
+    ctx.arc(mx + boat.x * scaleX, my + boat.y * scaleY, 2.5, 0, Math.PI * 2);
     ctx.fill();
   }
   if (state.police.heli) {

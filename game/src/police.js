@@ -7,6 +7,7 @@
 
 import { COP, WANTED } from './config.js';
 import { createCar, driveCar, KIND_POLICE, nearestIntersection } from './vehicles.js';
+import { createBoat, driveBoat } from './boats.js';
 import { randomIntersection, nearestRoadPoint, resolveBuildings, clampToWorld } from './city.js';
 
 export function createPolice(random) {
@@ -18,6 +19,10 @@ export function createPolice(random) {
     roadblockAt: null,
     cars: [],
     cops: [],
+    // The ABPD boats: at three stars and above they chase Leo on the
+    // water while he is in a boat, and leave when the heat drops or he
+    // docks.
+    boats: [],
     // The police helicopter: at five stars it orbits Leo, its searchlight
     // on him, and the heat does not decay while it is up.
     heli: null,
@@ -74,9 +79,36 @@ function spawnFootCop(police, player) {
  */
 export function updatePolice(police, dt, player, city) {
   const events = { busted: false };
+  const onFoot = !player.inCar && !player.inBoat;
   // Reinforce to the wanted level.
   while (police.cars.length < wantedCarCount(police.wanted)) spawnPoliceCar(police, player);
-  while (police.cops.length < wantedCopCount(police.wanted, !!player.inCar)) spawnFootCop(police, player);
+  while (police.cops.length < wantedCopCount(police.wanted, !onFoot)) spawnFootCop(police, player);
+
+  // The ABPD boats: three stars brings one out while Leo is sailing, a
+  // second at four stars. They chase him on the water and ram his boat.
+  const wantedBoatCount = player.inBoat ? Math.max(0, Math.min(police.wanted - 2, 2)) : 0;
+  while (police.boats.length < wantedBoatCount) {
+    const bx = Math.max(60, Math.min(3780, player.x + (police.random() - 0.5) * 700));
+    const boat = createBoat(bx, 2500, Math.atan2(player.y - 2500, player.x - bx), 'police');
+    boat.speed = 200;
+    police.boats.push(boat);
+  }
+  if (!player.inBoat) police.boats.length = 0;
+  for (const boat of police.boats) {
+    const dx = player.x - boat.x;
+    const dy = player.y - boat.y;
+    const dist = Math.hypot(dx, dy);
+    const targetAngle = Math.atan2(dy, dx);
+    let diff = targetAngle - boat.angle;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    const steer = Math.max(-1, Math.min(1, diff * 2.4));
+    // Ease off as it closes in: a boat at full speed overshoots Leo and
+    // has to turn the whole bay to come back.
+    const targetSpeed = dist > 200 ? 550 : dist > 90 ? 320 : 140;
+    const throttle = boat.speed < targetSpeed ? 1 : -1;
+    driveBoat(boat, dt, throttle, steer, false);
+  }
 
   // The helicopter: five stars brings it in, it orbits Leo with the
   // searchlight on him, and it leaves when the heat drops below five.
@@ -144,7 +176,7 @@ export function updatePolice(police, dt, player, city) {
     }
     resolveBuildings(city, cop);
     clampToWorld(cop, 30);
-    if (!player.inCar && dist < 46) {
+    if (onFoot && dist < 46) {
       cop.bust += dt;
       if (cop.bust >= COP.bustTime) {
         events.busted = true;
@@ -156,7 +188,7 @@ export function updatePolice(police, dt, player, city) {
   }
 
   // A cruiser parked on Leo while he is on foot busts him too.
-  if (!player.inCar && police.wanted > 0) {
+  if (onFoot && police.wanted > 0) {
     for (const car of police.cars) {
       const dist = Math.hypot(car.x - player.x, car.y - player.y);
       if (dist < 50 && Math.abs(car.speed) < 60) {
@@ -198,6 +230,7 @@ export function updatePolice(police, dt, player, city) {
   if (police.wanted === 0) {
     police.cars.length = 0;
     police.cops.length = 0;
+    police.boats.length = 0;
     police.heli = null;
   }
   return events;
@@ -209,6 +242,7 @@ export function clearPolice(police) {
   police.bustTimer = 0;
   police.cars.length = 0;
   police.cops.length = 0;
+  police.boats.length = 0;
   police.heli = null;
   police.heliAnnounced = false;
 }
